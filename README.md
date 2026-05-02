@@ -1,5 +1,7 @@
 ﻿# CityLife Review
 
+English | [简体中文](README.zh-CN.md)
+
 CityLife Review is a Spring Boot backend service for a local life-review platform. It supports phone-code login, shop browsing, nearby shop search, shop type caching, blog posting, likes, follows, feed streams, daily sign-in, vouchers, and high-concurrency flash-sale voucher ordering.
 
 The project focuses on practical backend concerns: Redis caching, asynchronous order creation, message reliability, and high-concurrency consistency.
