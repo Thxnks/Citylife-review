@@ -1,0 +1,11 @@
+.git
+.git_backup
+.idea
+.vscode
+target
+output
+tools
+*.iml
+*.iws
+*.ipr
+HELP.md

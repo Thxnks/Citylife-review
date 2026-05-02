@@ -175,6 +175,53 @@ Default server port:
 8081
 ```
 
+## Docker Deployment
+
+Prerequisites:
+
+- Docker
+- Docker Compose
+
+Start the application and its dependencies:
+
+```bash
+docker compose up -d --build
+```
+
+The compose stack starts:
+
+- `app` on `http://localhost:8081`
+- MySQL on `localhost:3306`
+- Redis on `localhost:6379`
+- RabbitMQ on `localhost:5672`
+- RabbitMQ Management UI on `http://localhost:15672`
+
+Default container credentials:
+
+```text
+MySQL root password: citylife_root
+RabbitMQ username: citylife
+RabbitMQ password: citylife_pass
+```
+
+MySQL is initialized from:
+
+```text
+src/main/resources/db/citylife_review.sql
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Remove containers and persistent data volumes:
+
+```bash
+docker compose down -v
+```
+
 ## API Documentation
 
 See [docs/api.md](docs/api.md).

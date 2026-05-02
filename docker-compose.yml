@@ -1,0 +1,88 @@
+services:
+  app:
+    build: .
+    container_name: citylife-review-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/citylife_review?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: citylife_root
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: citylife
+      RABBITMQ_PASSWORD: citylife_pass
+      RABBITMQ_VIRTUAL_HOST: /
+      CITYLIFE_IMAGE_UPLOAD_DIR: /app/uploads/
+    ports:
+      - "8081:8081"
+    volumes:
+      - citylife_uploads:/app/uploads
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:5.7
+    container_name: citylife-review-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: citylife_root
+      MYSQL_DATABASE: citylife_review
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./src/main/resources/db/citylife_review.sql:/docker-entrypoint-initdb.d/01-citylife-review.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pcitylife_root"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:6.2-alpine
+    container_name: citylife-review-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: citylife-review-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: citylife
+      RABBITMQ_DEFAULT_PASS: citylife_pass
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  citylife_uploads:
