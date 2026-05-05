@@ -81,27 +81,34 @@ Redis Lua script
   - Record user qualification
   |
   v
+Create PROCESSING order in MySQL
+  |
+  v
 Publish VoucherOrderMessage to RabbitMQ
   |
   v
 Consumer creates order asynchronously
   - Redisson user-level lock
-  - MySQL duplicate-order check
+  - Verify PROCESSING order
   - MySQL stock deduction
-  - Save voucher order
+  - Mark voucher order as SUCCESS
   |
   v
-ACK on success, reject to DLQ on unrecoverable failure
+ACK on success, mark FAILED and reject to DLQ on unrecoverable failure
 ```
 
 Reliability safeguards:
 
 - RabbitMQ publisher confirm and return callback.
-- Redis rollback when message publishing fails.
+- Persisted `PROCESSING` order state before MQ publishing.
+- Redis rollback when message publishing or consuming fails.
 - Consumer manual ACK.
 - Dead-letter queue for failed order creation.
+- Scheduled compensation for stale `PROCESSING` orders.
 - Redisson lock for user-level concurrency control.
 - MySQL unique index on `tb_voucher_order(user_id, voucher_id)`.
+
+See [docs/order-reliability.md](docs/order-reliability.md) for the order state and compensation design.
 
 ## Redis Usage
 
@@ -238,5 +245,6 @@ Real benchmark screenshots should be generated from your own machine after MySQL
 
 - Implemented Redis-based login state, cache penetration protection, GEO search, ZSet likes/feed, and Bitmap sign-in.
 - Used Redis Lua to atomically validate voucher stock and one-user-one-order constraints.
-- Built RabbitMQ asynchronous order creation with publisher confirm, return callback, manual ACK, DLQ, and Redis rollback compensation.
+- Built RabbitMQ asynchronous order creation with persisted order state, publisher confirm, return callback, manual ACK, DLQ, and Redis rollback compensation.
+- Added scheduled compensation for stale processing orders to reduce Redis/MySQL inconsistency after MQ or consumer failures.
 - Used Redisson and a MySQL unique index to prevent duplicate voucher orders under concurrency.

@@ -3,8 +3,9 @@ local userId = ARGV[2]
 
 local stockKey = 'seckill:stock:' .. voucherId
 local orderKey = 'seckill:order:' .. voucherId
+local stock = redis.call('get', stockKey)
 
-if(tonumber(redis.call('get', stockKey)) <= 0) then
+if(stock == false or tonumber(stock) <= 0) then
     return 1
 end
 

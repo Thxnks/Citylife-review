@@ -4,6 +4,7 @@ import com.citylife.dto.VoucherOrderMessage;
 import com.citylife.entity.VoucherOrder;
 import com.citylife.enums.VoucherOrderCreateResult;
 import com.citylife.service.IVoucherOrderService;
+import com.citylife.service.VoucherOrderCompensationService;
 import com.citylife.utils.RabbitMQConstants;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,9 @@ public class VoucherOrderConsumer {
     @Resource
     private IVoucherOrderService voucherOrderService;
 
+    @Resource
+    private VoucherOrderCompensationService compensationService;
+
     @RabbitListener(
             queues = RabbitMQConstants.SECKILL_ORDER_QUEUE,
             containerFactory = "manualAckRabbitListenerContainerFactory"
@@ -35,12 +39,38 @@ public class VoucherOrderConsumer {
 
             VoucherOrderCreateResult result = voucherOrderService.createVoucherOrder(voucherOrder);
             if (result == VoucherOrderCreateResult.STOCK_NOT_ENOUGH) {
+                compensationService.failAndRollback(
+                        orderMessage.getId(),
+                        orderMessage.getUserId(),
+                        orderMessage.getVoucherId(),
+                        "MySQL stock not enough"
+                );
+                channel.basicReject(deliveryTag, false);
+                return;
+            }
+            if (result == VoucherOrderCreateResult.ORDER_NOT_FOUND) {
+                compensationService.rollbackOnly(
+                        orderMessage.getId(),
+                        orderMessage.getUserId(),
+                        orderMessage.getVoucherId(),
+                        result.name()
+                );
+                channel.basicReject(deliveryTag, false);
+                return;
+            }
+            if (result == VoucherOrderCreateResult.ORDER_ALREADY_FAILED) {
                 channel.basicReject(deliveryTag, false);
                 return;
             }
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
             log.error("create voucher order failed, message: {}", orderMessage, e);
+            compensationService.failAndRollback(
+                    orderMessage.getId(),
+                    orderMessage.getUserId(),
+                    orderMessage.getVoucherId(),
+                    "Consumer exception"
+            );
             channel.basicReject(deliveryTag, false);
         }
     }

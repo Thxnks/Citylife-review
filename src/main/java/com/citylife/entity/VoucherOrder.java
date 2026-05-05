@@ -48,6 +48,10 @@ public class VoucherOrder implements Serializable {
 
     /**
      */
+    private String failReason;
+
+    /**
+     */
     private LocalDateTime createTime;
 
     /**

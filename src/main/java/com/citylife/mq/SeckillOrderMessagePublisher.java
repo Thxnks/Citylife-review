@@ -1,20 +1,17 @@
 package com.citylife.mq;
 
 import com.citylife.dto.VoucherOrderMessage;
+import com.citylife.service.VoucherOrderCompensationService;
 import com.citylife.utils.RabbitMQConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static com.citylife.utils.RedisConstants.SECKILL_ORDER_KEY;
-import static com.citylife.utils.RedisConstants.SECKILL_STOCK_KEY;
 
 @Slf4j
 @Component
@@ -24,7 +21,7 @@ public class SeckillOrderMessagePublisher {
     private RabbitTemplate rabbitTemplate;
 
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
+    private VoucherOrderCompensationService compensationService;
 
     private final Map<String, VoucherOrderMessage> pendingMessages = new ConcurrentHashMap<>();
 
@@ -81,11 +78,11 @@ public class SeckillOrderMessagePublisher {
         if (orderMessage == null) {
             return;
         }
-        String voucherId = orderMessage.getVoucherId().toString();
-        String userId = orderMessage.getUserId().toString();
-        stringRedisTemplate.opsForValue().increment(SECKILL_STOCK_KEY + voucherId);
-        stringRedisTemplate.opsForSet().remove(SECKILL_ORDER_KEY + voucherId, userId);
-        log.warn("rolled back seckill redis state, orderId: {}, voucherId: {}, userId: {}",
-                orderMessage.getId(), voucherId, userId);
+        compensationService.failAndRollback(
+                orderMessage.getId(),
+                orderMessage.getUserId(),
+                orderMessage.getVoucherId(),
+                "MQ publish failed"
+        );
     }
 }

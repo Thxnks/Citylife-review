@@ -37,6 +37,7 @@ Goal:
 - Verify that one user cannot create duplicate orders.
 - Verify that RabbitMQ can absorb order creation pressure.
 - Verify that failed consumer messages go to the dead-letter queue.
+- Verify that timeout or failed `PROCESSING` orders are marked `FAILED` and Redis pre-deducted state is rolled back.
 
 ## Environment Checklist
 
@@ -90,8 +91,13 @@ SELECT voucher_id, COUNT(*) FROM tb_voucher_order GROUP BY voucher_id;
 
 SELECT user_id, voucher_id, COUNT(*)
 FROM tb_voucher_order
+WHERE status = 1
 GROUP BY user_id, voucher_id
 HAVING COUNT(*) > 1;
+
+SELECT id, user_id, voucher_id, status, fail_reason
+FROM tb_voucher_order
+WHERE status IN (0, 7);
 ```
 
 Expected:
@@ -129,4 +135,3 @@ Fill this after running the test:
 | Orders created | TBD |
 | Duplicate orders | TBD |
 | Oversold | TBD |
-

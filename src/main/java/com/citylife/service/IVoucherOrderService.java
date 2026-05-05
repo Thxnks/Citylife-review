@@ -18,5 +18,7 @@ public interface IVoucherOrderService extends IService<VoucherOrder> {
 
     Result<?> queryOrderStatus(Long orderId);
 
+    boolean saveProcessingOrder(VoucherOrder voucherOrder);
+
     VoucherOrderCreateResult createVoucherOrder(VoucherOrder voucherOrder);
 }

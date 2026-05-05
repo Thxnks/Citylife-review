@@ -250,6 +250,7 @@ CREATE TABLE `tb_voucher_order`  (
   `voucher_id` bigint(20) UNSIGNED NOT NULL COMMENT '璐拱鐨勪唬閲戝埜id',
   `pay_type` tinyint(1) UNSIGNED NOT NULL DEFAULT 1 COMMENT '鏀粯鏂瑰紡 1锛氫綑棰濇敮浠橈紱2锛氭敮浠樺疂锛?锛氬井淇?,
   `status` tinyint(1) UNSIGNED NOT NULL DEFAULT 1 COMMENT '璁㈠崟鐘舵€侊紝1锛氭湭鏀粯锛?锛氬凡鏀粯锛?锛氬凡鏍搁攢锛?锛氬凡鍙栨秷锛?锛氶€€娆句腑锛?锛氬凡閫€娆?,
+  `fail_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '寮傛涓嬪崟澶辫触鍘熷洜',
   `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '涓嬪崟鏃堕棿',
   `pay_time` timestamp NULL DEFAULT NULL COMMENT '鏀粯鏃堕棿',
   `use_time` timestamp NULL DEFAULT NULL COMMENT '鏍搁攢鏃堕棿',

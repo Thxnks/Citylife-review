@@ -6,17 +6,19 @@ import com.citylife.dto.Result;
 import com.citylife.dto.VoucherOrderMessage;
 import com.citylife.entity.VoucherOrder;
 import com.citylife.enums.VoucherOrderCreateResult;
+import com.citylife.enums.VoucherOrderStatus;
 import com.citylife.mapper.VoucherOrderMapper;
 import com.citylife.mq.SeckillOrderMessagePublisher;
 import com.citylife.service.ISeckillVoucherService;
 import com.citylife.service.IVoucherOrderService;
+import com.citylife.service.VoucherOrderCompensationService;
 import com.citylife.utils.RedisIdWorker;
 import com.citylife.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private SeckillOrderMessagePublisher seckillOrderMessagePublisher;
 
+    @Resource
+    private VoucherOrderCompensationService compensationService;
+
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
 
     static {
@@ -64,6 +69,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 Collections.emptyList(),
                 voucherId.toString(), userId.toString()
         );
+        if (result == null) {
+            return Result.fail("Failed to execute seckill check");
+        }
 
         int r = result.intValue();
         if (r != 0) {
@@ -74,7 +82,23 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         orderMessage.setId(orderId);
         orderMessage.setUserId(userId);
         orderMessage.setVoucherId(voucherId);
-        seckillOrderMessagePublisher.send(orderMessage);
+
+        VoucherOrder voucherOrder = new VoucherOrder();
+        voucherOrder.setId(orderId);
+        voucherOrder.setUserId(userId);
+        voucherOrder.setVoucherId(voucherId);
+        voucherOrder.setStatus(VoucherOrderStatus.PROCESSING.getValue());
+        if (!saveProcessingOrder(voucherOrder)) {
+            compensationService.rollbackOnly(orderId, userId, voucherId, "Failed to persist processing order");
+            return Result.fail("Failed to create order");
+        }
+
+        try {
+            seckillOrderMessagePublisher.send(orderMessage);
+        } catch (RuntimeException e) {
+            compensationService.failAndRollback(orderId, userId, voucherId, "MQ publish exception");
+            throw e;
+        }
         log.info("sent seckill order message, orderId: {}, voucherId: {}, userId: {}", orderId, voucherId, userId);
 
         return Result.ok(orderId);
@@ -88,12 +112,31 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             if (!userId.equals(voucherOrder.getUserId())) {
                 return Result.fail("Forbidden");
             }
+            if (VoucherOrderStatus.PROCESSING.getValue() == voucherOrder.getStatus()
+                    || VoucherOrderStatus.FAILED.getValue() == voucherOrder.getStatus()) {
+                OrderStatusDTO status = new OrderStatusDTO();
+                status.setOrderId(orderId);
+                status.setStatus(VoucherOrderStatus.describe(voucherOrder.getStatus()));
+                return Result.ok(status);
+            }
             return Result.ok(voucherOrder);
         }
         OrderStatusDTO status = new OrderStatusDTO();
         status.setOrderId(orderId);
         status.setStatus("PROCESSING");
         return Result.ok(status);
+    }
+
+    @Override
+    public boolean saveProcessingOrder(VoucherOrder voucherOrder) {
+        try {
+            voucherOrder.setStatus(VoucherOrderStatus.PROCESSING.getValue());
+            return save(voucherOrder);
+        } catch (DuplicateKeyException e) {
+            log.warn("processing voucher order already exists, orderId: {}, userId: {}, voucherId: {}",
+                    voucherOrder.getId(), voucherOrder.getUserId(), voucherOrder.getVoucherId());
+            return false;
+        }
     }
 
     @Override
@@ -109,10 +152,22 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
         try {
-            int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
-            if (count > 0) {
-                log.warn("duplicate voucher order, userId: {}, voucherId: {}", userId, voucherId);
-                return VoucherOrderCreateResult.DUPLICATE;
+            VoucherOrder existingOrder = getById(voucherOrder.getId());
+            if (existingOrder == null) {
+                log.error("processing voucher order not found, orderId: {}", voucherOrder.getId());
+                return VoucherOrderCreateResult.ORDER_NOT_FOUND;
+            }
+            if (!userId.equals(existingOrder.getUserId()) || !voucherId.equals(existingOrder.getVoucherId())) {
+                log.error("voucher order message does not match processing order, orderId: {}", voucherOrder.getId());
+                return VoucherOrderCreateResult.ORDER_NOT_FOUND;
+            }
+            if (VoucherOrderStatus.FAILED.getValue() == existingOrder.getStatus()) {
+                log.warn("voucher order is already failed, orderId: {}", voucherOrder.getId());
+                return VoucherOrderCreateResult.ORDER_ALREADY_FAILED;
+            }
+            if (VoucherOrderStatus.SUCCESS.getValue() == existingOrder.getStatus()) {
+                log.warn("duplicate voucher order message, orderId: {}", voucherOrder.getId());
+                return VoucherOrderCreateResult.SUCCESS;
             }
 
             boolean success = seckillVoucherService.update()
@@ -125,11 +180,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 return VoucherOrderCreateResult.STOCK_NOT_ENOUGH;
             }
 
-            try {
-                save(voucherOrder);
-            } catch (DuplicateKeyException e) {
-                log.warn("duplicate voucher order caught by unique index, userId: {}, voucherId: {}", userId, voucherId);
-                return VoucherOrderCreateResult.DUPLICATE;
+            boolean orderUpdated = update()
+                    .set("status", VoucherOrderStatus.SUCCESS.getValue())
+                    .set("fail_reason", null)
+                    .eq("id", voucherOrder.getId())
+                    .eq("status", VoucherOrderStatus.PROCESSING.getValue())
+                    .update();
+            if (!orderUpdated) {
+                log.warn("voucher order status was changed before creation, orderId: {}", voucherOrder.getId());
+                return VoucherOrderCreateResult.ORDER_ALREADY_FAILED;
             }
             log.info("created voucher order, orderId: {}, voucherId: {}, userId: {}",
                     voucherOrder.getId(), voucherId, userId);
