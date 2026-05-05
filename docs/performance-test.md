@@ -52,6 +52,30 @@ Goal:
 seckill:stock:{voucherId}
 ```
 
+## Run Sequence
+
+Start the local stack:
+
+```bash
+docker compose up -d --build
+```
+
+Prepare one seckill voucher and initialize Redis stock. Replace `1` and `100` with your test voucher ID and stock:
+
+```text
+SET seckill:stock:1 100
+DEL seckill:order:1
+```
+
+Generate a login token through:
+
+```http
+POST /user/code?phone=13800138000
+POST /user/login
+```
+
+Use the returned token as the JMeter `authorization` header.
+
 ## Suggested JMeter Plan
 
 Thread Group:
@@ -87,7 +111,9 @@ Listeners:
 After the test:
 
 ```sql
-SELECT voucher_id, COUNT(*) FROM tb_voucher_order GROUP BY voucher_id;
+SELECT voucher_id, status, COUNT(*)
+FROM tb_voucher_order
+GROUP BY voucher_id, status;
 
 SELECT user_id, voucher_id, COUNT(*)
 FROM tb_voucher_order
@@ -102,8 +128,9 @@ WHERE status IN (0, 7);
 
 Expected:
 
-- Order count must not exceed the configured stock.
+- Successful order count must not exceed the configured stock.
 - Duplicate order query should return no rows.
+- Stale `PROCESSING` orders should eventually become `FAILED` after compensation.
 
 Redis checks:
 
@@ -133,5 +160,7 @@ Fill this after running the test:
 | P95 latency | TBD |
 | Throughput | TBD |
 | Orders created | TBD |
+| Failed compensated orders | TBD |
+| Processing orders after compensation | TBD |
 | Duplicate orders | TBD |
 | Oversold | TBD |

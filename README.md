@@ -241,6 +241,16 @@ See [docs/performance-test.md](docs/performance-test.md).
 
 Real benchmark screenshots should be generated from your own machine after MySQL, Redis, RabbitMQ, and the application are running. Do not use fabricated numbers in resumes or interviews.
 
+## Testing
+
+The default test suite does not require local middleware:
+
+```bash
+mvn test
+```
+
+See [docs/testing.md](docs/testing.md) for automated coverage and manual integration-test notes.
+
 ## Suggested Resume Highlights
 
 - Implemented Redis-based login state, cache penetration protection, GEO search, ZSet likes/feed, and Bitmap sign-in.

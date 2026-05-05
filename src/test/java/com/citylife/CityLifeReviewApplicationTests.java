@@ -4,6 +4,7 @@ import com.citylife.entity.Shop;
 import com.citylife.service.impl.ShopServiceImpl;
 import com.citylife.utils.CacheClient;
 import com.citylife.utils.RedisIdWorker;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.geo.Point;
@@ -24,6 +25,7 @@ import static com.citylife.utils.RedisConstants.CACHE_SHOP_KEY;
 import static com.citylife.utils.RedisConstants.SHOP_GEO_KEY;
 
 @SpringBootTest
+@Disabled("Manual Redis/MySQL data-preparation tests. Do not run in the default Maven test lifecycle.")
 class CityLifeReviewApplicationTests {
 
     @Resource

@@ -2,13 +2,14 @@ package com.citylife;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class NormalTest {
 
     @Test
-    void testBitMap() {
+    void shouldCountConsecutiveSignBits() {
         int i = 0b1110111111111111111111111;
 
-        long t1 = System.nanoTime();
         int count = 0;
         while (true) {
             if ((i & 1) == 0) {
@@ -18,12 +19,8 @@ public class NormalTest {
             }
             i >>>= 1;
         }
-        long t2 = System.nanoTime();
-        System.out.println("time1 = " + (t2 - t1));
-        System.out.println("count = " + count);
 
         i = 0b1110111111111111111111111;
-        long t3 = System.nanoTime();
         int count2 = 0;
         while (true) {
             if (i >>> 1 << 1 == i) {
@@ -33,8 +30,8 @@ public class NormalTest {
             }
             i >>>= 1;
         }
-        long t4 = System.nanoTime();
-        System.out.println("time2 = " + (t4 - t3));
-        System.out.println("count2 = " + count2);
+
+        assertEquals(21, count);
+        assertEquals(count, count2);
     }
 }
