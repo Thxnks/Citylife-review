@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityLife Review — Spring Boot 3.x + Spring AI 升级复盘</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 36px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 18px; line-height: 1.72; color: #111827; background: linear-gradient(180deg, #f8fafc 0%, #f3f6fb 42%, #f7f8fb 100%);
+}
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .en-token, .file-path, .en-method { font-family: Consolas, "Cascadia Code", "SF Mono", monospace; }
+
+/* ===== Layout ===== */
+.page-wrap { display: flex; width: 100%; max-width: 1560px; margin: 0; min-height: 100vh; }
+
+/* ===== Left TOC ===== */
+.toc-sidebar {
+  position: sticky; top: 0; height: 100vh; width: 258px; min-width: 258px;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-right: 1px solid #d8e0ec; padding: 34px 18px;
+  overflow-y: auto; font-size: 15px; z-index: 10; box-shadow: 8px 0 24px rgba(15, 23, 42, 0.035);
+}
+.toc-sidebar h2 { font-size: 17px; color: #111827; margin-bottom: 14px; font-weight: 700; }
+.toc-sidebar nav a {
+  display: block; padding: 7px 10px; border-radius: 7px; color: #4b5563;
+  margin-bottom: 3px; border-left: 3px solid transparent; transition: background .18s, color .18s, border-color .18s, transform .18s;
+}
+.toc-sidebar nav a:hover { background: #f1f5fb; color: #1d4ed8; text-decoration: none; }
+.toc-sidebar nav a.active { background: #eaf2ff; color: #1d4ed8; text-decoration: none; border-left-color: #2563eb; font-weight: 700; transform: translateX(2px); }
+.toc-sidebar nav a.sub { padding-left: 22px; font-size: 14px; }
+.toc-badge {
+  display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
+  font-weight: 600; vertical-align: middle; margin-left: 3px;
+}
+.toc-badge.new { background: #dcfce7; color: #15803d; }
+.toc-badge.chg { background: #fff7ed; color: #c2410c; }
+
+/* ===== Main Content ===== */
+.main-content { flex: 1; max-width: 1200px; padding: 40px 52px 42vh; min-width: 0; }
+.main-content section { margin-bottom: 72px; scroll-margin-top: 36px; }
+.main-content h1 { font-size: 33px; font-weight: 800; color: #111827; margin-bottom: 4px; }
+.main-content h2 {
+  font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 18px;
+  padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;
+}
+.main-content h3 { font-size: 21px; font-weight: 600; color: #1f2937; margin: 22px 0 10px; }
+.main-content p, .main-content li { color: #374151; margin-bottom: 8px; }
+.main-content ul, .main-content ol { padding-left: 22px; margin-bottom: 12px; }
+
+/* ===== Hero Summary ===== */
+.hero-summary {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 58%, #f4f8ff 100%);
+  border-radius: 8px; padding: 36px 40px; border: 1px solid #d8e0ec;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+}
+.hero-summary h1 { border: none; padding: 0; margin-bottom: 4px; }
+.hero-subtitle { color: #6b7280; font-size: 17px; margin-bottom: 20px; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px;
+  border-radius: 20px; font-size: 14px; font-weight: 600;
+}
+.hero-tag.rec { background: #dcfce7; color: #15803d; }
+.hero-tag.risk { background: #fef3c7; color: #92400e; }
+.hero-tag.files { background: #dbeafe; color: #1d4ed8; }
+.hero-tag.ver { background: #f3e8ff; color: #7c3aed; }
+.hero-stat-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 16px; }
+.hero-stat {
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;
+  padding: 14px 20px; min-width: 90px;
+}
+.hero-stat .num { font-size: 27px; font-weight: 800; color: #111827; }
+.hero-stat .label { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+/* ===== Feature Grid ===== */
+.feature-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px;
+}
+.feature-card {
+  background: #fff; border: 1px solid #e2e6ed; border-radius: 8px;
+  padding: 24px 26px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  transition: transform .2s, box-shadow .2s;
+}
+.feature-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }
+.feature-card h3 { font-size: 19px; margin: 0 0 8px; color: #111827; }
+.feature-card .fc-badge {
+  display: inline-block; font-size: 13px; padding: 2px 9px; border-radius: 4px;
+  font-weight: 600; margin-bottom: 10px;
+}
+.fc-badge.new { background: #dcfce7; color: #15803d; }
+.fc-badge.chg { background: #fff7ed; color: #c2410c; }
+.feature-card .fc-desc { font-size: 16px; color: #4b5563; line-height: 1.6; }
+
+/* ===== Explain Strip ===== */
+.explain-strip {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;
+}
+.explain-card {
+  background: #fff; border: 1px solid #e2e6ed; border-radius: 8px; padding: 24px 26px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+.explain-card h3 { margin-top: 0; }
+.explain-card .ec-label {
+  display: inline-block; font-size: 13px; padding: 2px 8px; border-radius: 4px;
+  font-weight: 600; margin-bottom: 8px;
+}
+.ec-label.before { background: #fee2e2; color: #991b1b; }
+.ec-label.after { background: #dcfce7; color: #15803d; }
+.ec-label.why { background: #dbeafe; color: #1d4ed8; }
+.explain-card p { font-size: 16px; color: #4b5563; }
+
+/* ===== Code Panel ===== */
+.code-panel {
+  background: #fff; border: 1px solid #e2e6ed; border-radius: 8px;
+  margin-bottom: 32px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04); overflow: hidden;
+}
+.code-panel .cp-header {
+  background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 14px 22px;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.cp-header .cp-file { font-weight: 700; color: #111827; font-size: 16px; }
+.cp-header .cp-tag {
+  font-size: 13px; padding: 2px 10px; border-radius: 4px; font-weight: 600;
+}
+.cp-tag.rewritten { background: #fef3c7; color: #92400e; }
+.cp-tag.deleted { background: #fee2e2; color: #991b1b; }
+.cp-tag.newfile { background: #dcfce7; color: #15803d; }
+.cp-tag.modified { background: #dbeafe; color: #1d4ed8; }
+.code-panel .cp-body { padding: 18px 22px; }
+.code-panel .cp-body p { font-size: 16px; color: #4b5563; margin-bottom: 12px; }
+.code-panel .cp-body ul { margin-bottom: 12px; }
+.code-panel .cp-body li { font-size: 16px; color: #4b5563; }
+
+/* syntax blocks */
+.pre-block {
+  background: #1e293b; border-radius: 8px; padding: 18px 22px; overflow-x: auto; margin: 12px 0 16px;
+  font-size: 15px; line-height: 1.65;
+}
+.pre-block pre { color: #e2e8f0; font-family: Consolas, "Cascadia Code", "SF Mono", monospace; white-space: pre; margin: 0; }
+.tok-kw { color: #c084fc; }
+.tok-str { color: #6ee7b7; }
+.tok-com { color: #64748b; font-style: italic; }
+.tok-method { color: #60a5fa; }
+.tok-class { color: #fbbf24; }
+.tok-ann { color: #f472b6; }
+.tok-num { color: #fb923c; }
+.tok-field { color: #93c5fd; }
+.line-hl { display: block; background: rgba(37, 99, 235, 0.18); border-left: 3px solid #60a5fa; padding-left: 14px; margin: 0 -22px; padding-right: 22px; }
+
+/* ===== Timeline ===== */
+.timeline { position: relative; padding-left: 52px; }
+.timeline::before {
+  content: ""; position: absolute; left: 21px; top: 8px; bottom: 8px;
+  width: 3px; background: linear-gradient(180deg, #2563eb 0%, #60a5fa 50%, #93c5fd 100%);
+  border-radius: 2px;
+}
+.tl-node { position: relative; margin-bottom: 34px; }
+.tl-node::before {
+  content: ""; position: absolute; left: -35px; top: 5px;
+  width: 15px; height: 15px; border-radius: 50%; background: #2563eb; border: 3px solid #fff;
+  box-shadow: 0 0 0 3px #bfdbfe; z-index: 2;
+}
+.tl-node h3 { margin-top: 0; font-size: 20px; }
+.tl-node .tl-method { color: #6b7280; font-size: 15px; margin-bottom: 4px; }
+.tl-node .tl-desc { font-size: 16px; color: #4b5563; }
+.tl-node .tl-badge {
+  display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 6px;
+}
+.tl-badge.new { background: #dcfce7; color: #15803d; }
+.tl-badge.chg { background: #fff7ed; color: #c2410c; }
+
+.branch-note {
+  margin: 10px 0 4px; padding: 10px 16px; background: #f8fafc; border-left: 3px solid #93c5fd;
+  border-radius: 6px; font-size: 15px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.branch-note .branch-label {
+  font-size: 12px; padding: 1px 7px; border-radius: 3px; font-weight: 600;
+  background: #dbeafe; color: #1d4ed8; white-space: nowrap;
+}
+.branch-note .branch-condition { color: #1e293b; font-weight: 600; }
+.branch-note .branch-arrow { color: #6b7280; }
+.branch-note .branch-result { color: #4b5563; }
+
+/* ===== QA Cards ===== */
+.qa-card {
+  background: #fff; border: 1px solid #e2e6ed; border-radius: 8px;
+  padding: 22px 26px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+.qa-card summary {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 18px;
+  align-items: center; line-height: 1.5; font-weight: 600; color: #1f2937; font-size: 17px; cursor: pointer;
+  list-style: none;
+}
+.qa-card summary::-webkit-details-marker { display: none; }
+.qa-card summary::after { content: "▸"; font-size: 14px; color: #6b7280; justify-self: end; transition: transform .2s; }
+.qa-card[open] summary::after { transform: rotate(90deg); }
+.qa-card .qa-detail { padding-top: 14px; font-size: 16px; color: #4b5563; }
+.qa-card .qa-detail strong { color: #1f2937; }
+.qa-card .qa-detail .kp { color: #15803d; font-weight: 600; }
+.qa-card .qa-detail .pit { color: #c2410c; font-weight: 600; }
+
+/* ===== Interview Card ===== */
+.interview-card {
+  background: #fff; border: 1px solid #e2e6ed; border-radius: 8px;
+  padding: 22px 28px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+.interview-card h3 { margin-top: 0; }
+.interview-card .iv-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.iv-tag {
+  font-size: 13px; padding: 2px 9px; border-radius: 4px; font-weight: 600;
+}
+.iv-tag.kp { background: #dcfce7; color: #15803d; }
+.iv-tag.bonus { background: #dbeafe; color: #1d4ed8; }
+.iv-tag.pitfall { background: #fef3c7; color: #92400e; }
+
+/* ===== One Minute ===== */
+.one-minute {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 40%, #ecfeff 100%);
+  border: 1px solid #bae6fd; border-radius: 8px; padding: 28px 32px;
+  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.06);
+}
+.one-minute h3 { margin-top: 0; color: #1e40af; }
+.one-minute p { font-size: 17px; color: #1e3a5f; line-height: 1.8; }
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+  .toc-sidebar { display: none; }
+  .main-content { padding: 24px 20px 20vh; }
+  .hero-summary { padding: 24px 22px; }
+  .timeline { padding-left: 40px; }
+  .feature-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .main-content { padding: 16px 12px; }
+  .hero-stat-row { flex-direction: column; }
+  .code-panel .cp-body { padding: 12px; }
+  .pre-block { padding: 12px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+<!-- ===== Left TOC ===== -->
+<aside class="toc-sidebar">
+  <h2>改动目录</h2>
+  <nav>
+    <a href="#s1">改动总览</a>
+    <a href="#s2" class="sub">功能新增清单</a>
+    <a href="#s3" class="sub">版本对照表</a>
+    <a href="#s4">设计动机</a>
+    <a href="#s5">代码详解</a>
+    <a href="#s5a" class="sub">RecommendationAgent</a>
+    <a href="#s5b" class="sub">@Tool 工具改造</a>
+    <a href="#s5c" class="sub">RAGService + 向量检索</a>
+    <a href="#s5d" class="sub">PreferenceExtractor</a>
+    <a href="#s5e" class="sub">MemoryService 简化</a>
+    <a href="#s5f" class="sub">基础设施适配</a>
+    <a href="#s6">核心流程图</a>
+    <a href="#s7">自测与面试追问</a>
+    <a href="#s8">一分钟口述</a>
+  </nav>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main-content">
+
+<!-- 1. Hero Summary -->
+<section id="s1" class="hero-summary">
+  <h1>CityLife Review — Spring Boot 3.x + Spring AI 升级</h1>
+  <p class="hero-subtitle">从 Java 8 / Boot 2.3 手写 Agent 管线，升级到 Java 17 / Boot 3.4 / Spring AI 标准化方案</p>
+  <div class="hero-meta">
+    <span class="hero-tag rec">推荐合并</span>
+    <span class="hero-tag risk">风险 中</span>
+    <span class="hero-tag files">改动 ~40 文件</span>
+    <span class="hero-tag ver">Boot 2.3 → 3.4.5</span>
+    <span class="hero-tag ver">Java 8 → 17</span>
+  </div>
+  <div class="hero-stat-row">
+    <div class="hero-stat"><div class="num">8</div><div class="label">删除手写文件（Spring AI 替代）</div></div>
+    <div class="hero-stat"><div class="num">12</div><div class="label">重写/新建核心文件</div></div>
+    <div class="hero-stat"><div class="num">31</div><div class="label">javax → jakarta 迁移</div></div>
+    <div class="hero-stat"><div class="num">~1000</div><div class="label">削减手写代码行数</div></div>
+    <div class="hero-stat"><div class="num">11</div><div class="label">测试通过 (0 失败)</div></div>
+  </div>
+</section>
+
+<!-- 2. Feature Summary -->
+<section id="s2">
+  <h2>新增了什么能力</h2>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>Spring AI ChatClient 驱动 Agent</h3>
+      <p class="fc-desc">RecommendationAgent 从手写 RestTemplate + 手动 tool loop（~180 行）改为 Spring AI <code class="en-token">ChatClient</code> 声明式调用（~80 行）。工具调用、消息管理由框架自动处理。</p>
+    </div>
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>@Tool 注解替代自定义 Tool 接口</h3>
+      <p class="fc-desc">5 个工具的 JSON Schema 从手写 <code class="en-token">Map&lt;String,Object&gt;</code> 改为 Spring AI <code class="en-token">@Tool</code> + <code class="en-token">@ToolParam</code> 注解自动生成，参数从 JSON String 变为类型安全的 Java 参数。</p>
+    </div>
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>ChatMemory 工作记忆</h3>
+      <p class="fc-desc">对话历史管理从手写 Redis String 读写改为 Spring AI <code class="en-token">ChatMemory</code> + <code class="en-token">MessageChatMemoryAdvisor</code>，历史注入完全自动，无需手动拼接 messages 列表。</p>
+    </div>
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>SimpleVectorStore 向量检索</h3>
+      <p class="fc-desc">手写的 <code class="en-token">InMemoryVectorStore</code>（余弦相似度暴力检索，~124 行）替换为 Spring AI 标准 <code class="en-token">SimpleVectorStore</code>，embedding 计算内置，支持后续无缝切换生产级向量库。</p>
+    </div>
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>TokenTextSplitter 分块</h3>
+      <p class="fc-desc">手写 CJK 感知分块器（~307 行）替换为 Spring AI <code class="en-token">TokenTextSplitter</code>。基于 BPE tokenizer 的真正 token 计数，而非启发式字符估算。</p>
+    </div>
+    <div class="feature-card">
+      <span class="fc-badge new">NEW</span>
+      <h3>ChatClient 结构化输出</h3>
+      <p class="fc-desc">PreferenceExtractor 从手写 RestTemplate + 脆弱的 JSON 子串提取改为 <code class="en-token">.call().entity(PreferenceProfile.class)</code>，Spring AI 自动完成 JSON 解析和字段映射。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Version Table -->
+<section id="s3">
+  <h2>版本对照表</h2>
+  <div class="explain-strip">
+    <div class="explain-card">
+      <span class="ec-label before">改动前</span>
+      <p>Java 1.8 · Spring Boot 2.3.12 · MyBatis-Plus 3.4.3 · Redisson 3.13.6 · SpringDoc 1.6.14 · Hutool 5.7.17 · MySQL 5.7 · ES 7.6.2</p>
+    </div>
+    <div class="explain-card">
+      <span class="ec-label after">改动后</span>
+      <p>Java 17 · Spring Boot 3.4.5 · Spring AI 1.0.0-M6 · MyBatis-Plus 3.5.7 · Redisson 3.40.2 · SpringDoc 2.8.3 · Hutool 5.8.34 · MySQL 8.0 · ES 7.17.28</p>
+    </div>
+    <div class="explain-card">
+      <span class="ec-label why">依赖精简</span>
+      <p>删除手动声明的 <code class="en-token">spring-data-redis</code> 和 <code class="en-token">lettuce-core</code> 版本覆盖，完全由 Boot 3.x parent 统一管理；删除手写的 8 个 Agent/RAG 基础设施文件。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Design Motivation -->
+<section id="s4">
+  <h2>问题与设计动机</h2>
+  <div class="explain-strip">
+    <div class="explain-card">
+      <span class="ec-label before">改动前</span>
+      <h3>手写所有 Agent 基础设施</h3>
+      <p>RecommendationAgent 用 <code class="en-token">RestTemplate</code> 手动拼 HTTP body、手写 tool calling loop（含 tool_calls 解析、tool 执行、结果回填）、手写 tool JSON Schema。每加一个 tool 都要写三四十行样板代码。Embedding 和向量检索同样是 RestTemplate + 手写余弦相似度。</p>
+    </div>
+    <div class="explain-card">
+      <span class="ec-label after">改动后</span>
+      <h3>Spring AI 标准化模块替代</h3>
+      <p><code class="en-token">ChatClient</code> 自动处理 tool calling loop；<code class="en-token">@Tool</code> 注解自动生成 function schema；<code class="en-token">ChatMemory</code> 自动管理对话历史；<code class="en-token">VectorStore</code> 统一检索接口；<code class="en-token">TokenTextSplitter</code> 做标准分块。业务 code 聚焦在 tool 的 execute 逻辑本身。</p>
+    </div>
+    <div class="explain-card">
+      <span class="ec-label why">为什么选 Spring AI</span>
+      <h3>框架选择考量</h3>
+      <p>ai-code-helper 项目用 LangChain4j 自研了完整 Agent 框架——这证明了底层理解。CityLife Review 换用 Spring AI 证明"我知道业界标准怎么用"。两个项目投递时能讲出不同框架的优劣对比。Spring AI 的自动配置和 Boot 原生集成也减少了配置成本。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Code Walkthrough -->
+<section id="s5">
+  <h2>详细代码解读</h2>
+
+  <!-- 5a. RecommendationAgent -->
+  <article id="s5a" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">agent/RecommendationAgent.java</span>
+      <span class="cp-tag rewritten">重写 · ~180行 → ~80行</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>职责：</strong>Agent 核心编排器。负责构建 ChatClient、注册工具、注入记忆、调用 LLM。</p>
+      <p><strong>关键改动：</strong>构造函数注入 <code class="en-token">ChatClient.Builder</code> 和所有 <code class="en-token">@Tool</code> bean，一次性配好 system prompt + memory advisor + tools：</p>
+<div class="pre-block"><pre><span class="tok-ann">@Component</span>
+<span class="tok-kw">public class</span> <span class="tok-class">RecommendationAgent</span> {
+    <span class="tok-kw">private final</span> <span class="tok-field">ChatClient</span> chatClient;
+    <span class="tok-kw">private final</span> <span class="tok-field">ChatMemory</span> chatMemory;
+
+<span class="line-hl">    <span class="tok-kw">public</span> <span class="tok-method">RecommendationAgent</span>(ChatClient.Builder builder, ChatMemory chatMemory,</span>
+<span class="line-hl">            BlogTool blogTool, ShopSearchTool shopSearchTool, VoucherTool voucherTool,</span>
+<span class="line-hl">            ReviewSearchTool reviewSearchTool, UserProfileTool userProfileTool) {</span>
+        <span class="tok-kw">this</span>.chatMemory = chatMemory;
+<span class="line-hl">        <span class="tok-kw">this</span>.chatClient = builder</span>
+<span class="line-hl">            .defaultSystem(SYSTEM_PROMPT)</span>
+<span class="line-hl">            .defaultAdvisors(<span class="tok-kw">new</span> MessageChatMemoryAdvisor(chatMemory))</span>
+<span class="line-hl">            .defaultTools(blogTool, shopSearchTool, voucherTool, reviewSearchTool, userProfileTool)</span>
+<span class="line-hl">            .build();</span>
+    }
+</pre></div>
+      <p><strong>调用流程：</strong></p>
+<div class="pre-block"><pre><span class="tok-kw">public</span> RecommendResult <span class="tok-method">recommend</span>(String userMessage, String sessionId) {
+    String conversationId = sessionId != <span class="tok-kw">null</span> ? sessionId : UUID...;
+
+    String reply = chatClient.prompt()
+        .user(userMessage)
+        .advisors(a -> a.param(<span class="tok-str">"chat_memory_conversation_id"</span>, conversationId))
+        .call()
+        .content();  <span class="tok-com">// ChatClient 内部自动处理 tool calling 循环</span>
+
+    <span class="tok-kw">return new</span> RecommendResult(reply, conversationId);
+}
+</pre></div>
+      <p><strong>Review 要点：</strong>ChatClient 内部自动 loop（最多多少次？）取决于模型配置。SYSTEM_PROMPT 不变，规则 1-6 完全保留。</p>
+      <p><strong>风险：</strong>ChatClient 默认 tool call 循环次数可能和原来手写的 8 轮上限不同，生产环境需要验证边界行为。</p>
+    </div>
+  </article>
+
+  <!-- 5b. @Tool Migration -->
+  <article id="s5b" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">agent/tool/BlogTool.java（示例）</span>
+      <span class="cp-tag modified">改造 · 5 个 Tool 统一模式</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>职责：</strong>从实现自定义 <code class="en-token">Tool</code> 接口（手写 <code class="en-token">getName()</code>/<code class="en-token">getDescription()</code>/<code class="en-token">getParametersSchema()</code>/<code class="en-token">execute(String)</code>）改为 <code class="en-token">@Tool</code> 注解 + 类型安全参数。</p>
+      <p><strong>改动前 — 手写 JSON Schema：</strong></p>
+<div class="pre-block"><pre><span class="tok-kw">public class</span> <span class="tok-class">BlogTool</span> <span class="tok-kw">implements</span> Tool {
+    <span class="tok-kw">public</span> Map&lt;String, Object&gt; <span class="tok-method">getParametersSchema</span>() {
+        Map&lt;String, Object&gt; props = <span class="tok-kw">new</span> HashMap&lt;&gt;();
+        Map&lt;String, Object&gt; shopIdProp = <span class="tok-kw">new</span> HashMap&lt;&gt;();
+        shopIdProp.put(<span class="tok-str">"type"</span>, <span class="tok-str">"integer"</span>);
+        shopIdProp.put(<span class="tok-str">"description"</span>, <span class="tok-str">"店铺ID"</span>);
+        props.put(<span class="tok-str">"shopId"</span>, shopIdProp);
+        <span class="tok-com">// ... 每个参数都要写 ~5 行样板</span>
+    }
+    <span class="tok-kw">public</span> String <span class="tok-method">execute</span>(String argumentsJson) {
+        JSONObject args = JSONUtil.parseObj(argumentsJson);  <span class="tok-com">// 手动解析 JSON</span>
+        Long shopId = args.getLong(<span class="tok-str">"shopId"</span>);
+        <span class="tok-com">// ...</span>
+    }
+}
+</pre></div>
+      <p><strong>改动后 — @Tool 注解：</strong></p>
+<div class="pre-block"><pre><span class="line-hl"><span class="tok-ann">@Component</span></span>
+<span class="tok-kw">public class</span> <span class="tok-class">BlogTool</span> {  <span class="tok-com">// 不再 implements Tool</span>
+<span class="line-hl">    <span class="tok-ann">@Tool</span>(description = <span class="tok-str">"获取某个店铺的用户点评/日记列表..."</span>)</span>
+<span class="line-hl">    <span class="tok-kw">public</span> String <span class="tok-method">getShopBlogs</span>(</span>
+<span class="line-hl">            <span class="tok-ann">@ToolParam</span>(description = <span class="tok-str">"店铺ID"</span>) Long shopId,</span>
+<span class="line-hl">            <span class="tok-ann">@ToolParam</span>(description = <span class="tok-str">"返回条数，默认5，最大10"</span>) Integer limit) {</span>
+        <span class="tok-com">// 参数直接是 Long 和 Integer，无需 JSON 手动解析</span>
+        <span class="tok-kw">if</span> (shopId == <span class="tok-kw">null</span>) <span class="tok-kw">return</span> error(<span class="tok-str">"shopId不能为空"</span>);
+        <span class="tok-com">// ... 业务逻辑完全不变</span>
+    }
+}
+</pre></div>
+      <p><strong>Review 要点：</strong>业务逻辑一行没改。删了 <code class="en-token">getName()</code>/<code class="en-token">getDescription()</code>/<code class="en-token">getParametersSchema()</code> 三个方法共 ~25 行/tool × 5 tools = ~125 行样板代码。参数从 JSON String 变为类型安全的 Java 参数，NPE 风险从运行时前移到编译期。</p>
+    </div>
+  </article>
+
+  <!-- 5c. RAGService -->
+  <article id="s5c" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">rag/RAGService.java + ReviewIndexService.java</span>
+      <span class="cp-tag rewritten">重写</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>职责：</strong>RAGService 负责语义检索 + 上下文构建；ReviewIndexService 负责启动时将 Blog 数据分块入库。</p>
+      <p><strong>关键改动 — RAGService：</strong>原来手动调 <code class="en-token">EmbeddingService.embed()</code> 再手动调 <code class="en-token">VectorStore.search()</code>，现在 VectorStore 内置 embedding：</p>
+<div class="pre-block"><pre><span class="tok-kw">public</span> List&lt;RetrievalResult&gt; <span class="tok-method">search</span>(String query, <span class="tok-kw">int</span> topK, String sourceType) {
+    <span class="tok-com">// VectorStore 内部自动 embedding，无需手动调用 EmbeddingService</span>
+    List&lt;Document&gt; docs = vectorStore.similaritySearch(
+<span class="line-hl">        SearchRequest.builder().query(query).topK(topK * <span class="tok-num">2</span>).build());</span>
+
+    <span class="tok-com">// Java 侧过滤 sourceType（SimpleVectorStore 的 filter 支持有限）</span>
+    List&lt;Document&gt; filtered = docs.stream()
+        .filter(d -> sourceType == <span class="tok-kw">null</span> || sourceType.equals(d.getMetadata().get(<span class="tok-str">"sourceType"</span>)))
+        .limit(topK).collect(Collectors.toList());
+    <span class="tok-com">// ... 装配 RetrievalResult，保留 citation 编号逻辑</span>
+}
+</pre></div>
+      <p><strong>关键改动 — ReviewIndexService：</strong>原来手动 new <code class="en-token">TextChunker(500, 50)</code> 逐篇分块 → 手动 batch embedding → 手动 addAll，现在 TokenTextSplitter + VectorStore 一步完成：</p>
+<div class="pre-block"><pre><span class="tok-ann">@PostConstruct</span>
+<span class="tok-kw">public void</span> <span class="tok-method">init</span>() {
+    List&lt;Blog&gt; blogs = blogService.list();
+    <span class="tok-com">// 构造 Spring AI Document 列表</span>
+    List&lt;Document&gt; documents = <span class="tok-kw">new</span> ArrayList&lt;&gt;();
+    <span class="tok-kw">for</span> (Blog blog : blogs) {
+        Map&lt;String, Object&gt; metadata = <span class="tok-kw">new</span> LinkedHashMap&lt;&gt;();
+        metadata.put(<span class="tok-str">"sourceType"</span>, <span class="tok-str">"blog"</span>);
+        metadata.put(<span class="tok-str">"documentId"</span>, String.valueOf(blog.getId()));
+        documents.add(<span class="tok-kw">new</span> Document(blog.getTitle() + <span class="tok-str">"\n\n"</span> + blog.getContent(), metadata));
+    }
+    <span class="tok-com">// TokenTextSplitter 分块 → VectorStore 自动 embedding 入库</span>
+<span class="line-hl">    TokenTextSplitter splitter = <span class="tok-kw">new</span> TokenTextSplitter();</span>
+<span class="line-hl">    vectorStore.add(splitter.apply(documents));</span>
+}
+</pre></div>
+      <p><strong>Review 要点：</strong>分块质量是否有差异？手写 TextChunker 做了 Markdown heading 感知 + breadcrumb 路径记录 + CJK 特殊处理，TokenTextSplitter 是通用 BPE tokenizer。丢失了 heading path 元数据（生产可加自定义 DocumentTransformer 补回）。</p>
+    </div>
+  </article>
+
+  <!-- 5d. PreferenceExtractor -->
+  <article id="s5d" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">agent/memory/PreferenceExtractor.java</span>
+      <span class="cp-tag rewritten">重写 · ~140行 → ~80行</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>职责：</strong>用 LLM 从对话历史中提取结构化用户偏好画像。</p>
+      <p><strong>关键改动：</strong>从手写 <code class="en-token">RestTemplate</code> POST + 脆弱的 <code class="en-token">content.indexOf('{')...lastIndexOf('}')</code> JSON 提取，改为 <code class="en-token">ChatClient.entity()</code> 结构化输出：</p>
+<div class="pre-block"><pre><span class="tok-kw">public</span> <span class="tok-method">PreferenceExtractor</span>(ChatClient.Builder builder) {
+    <span class="tok-kw">this</span>.chatClient = builder.defaultSystem(EXTRACT_PROMPT).build();
+}
+
+PreferenceProfile <span class="tok-method">extract</span>(Long userId, String dialogue) {
+    <span class="tok-com">// .entity() 自动处理 JSON 解析 + 字段映射，零手写 JSON 代码</span>
+<span class="line-hl">    PreferenceProfile profile = chatClient.prompt()</span>
+<span class="line-hl">        .user(<span class="tok-str">"请从以下对话中提取用户偏好：\n\n"</span> + dialogue)</span>
+<span class="line-hl">        .call()</span>
+<span class="line-hl">        .entity(PreferenceProfile.class);</span>
+    <span class="tok-kw">if</span> (profile != <span class="tok-kw">null</span>) {
+        profile.setLastUpdated(System.currentTimeMillis());
+    }
+    <span class="tok-kw">return</span> profile;
+}
+</pre></div>
+      <p><strong>Review 要点：</strong>提取 prompt 完全保留，对 LLM 输出质量无影响。结构化输出的可靠性提升：不再依赖 fragile 的 <code class="en-token">{}</code> 括号定位。</p>
+    </div>
+  </article>
+
+  <!-- 5e. MemoryService -->
+  <article id="s5e" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">agent/memory/MemoryService.java</span>
+      <span class="cp-tag modified">精简 · ~120行 → ~100行</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>职责：</strong>工作记忆交给 <code class="en-token">ChatMemory</code> + <code class="en-token">MessageChatMemoryAdvisor</code> 自动管理，MemoryService 只保留语义记忆（Redis Hash）和 session-user 关联。</p>
+      <p><strong>删除的方法：</strong><code class="en-token">getWorkingMemory()</code>、<code class="en-token">saveWorkingMemory()</code>、<code class="en-token">refreshWorkingMemoryTtl()</code> — 这些现在由 ChatMemory 内部处理。</p>
+      <p><strong>新增的方法：</strong><code class="en-token">associateSessionUser(sessionId, userId)</code>、<code class="en-token">getSessionUser(sessionId)</code> — 用于在 Agent 请求之间关联会话和用户，方便 PreferenceExtractor 找到目标用户。</p>
+    </div>
+  </article>
+
+  <!-- 5f. Infrastructure -->
+  <article id="s5f" class="code-panel">
+    <div class="cp-header">
+      <span class="cp-file">基础设施适配 (3 个文件)</span>
+      <span class="cp-tag modified">API 迁移</span>
+    </div>
+    <div class="cp-body">
+      <p><strong>1. ShopSearchServiceImpl — ES 5.x 客户端迁移：</strong></p>
+      <ul>
+        <li><code class="en-token">ElasticsearchRestTemplate</code> → <code class="en-token">ElasticsearchOperations</code>（Spring Data ES 5.x 统一接口）</li>
+        <li><code class="en-token">NativeSearchQuery</code> / <code class="en-token">NativeSearchQueryBuilder</code> → <code class="en-token">CriteriaQuery</code> + <code class="en-token">Criteria</code></li>
+        <li><code class="en-token">org.elasticsearch.*</code> 全部移除，改用 Spring Data 抽象层 + 新 ES Java 客户端</li>
+        <li><code class="en-token">GeoDistanceOrder</code> 构造器从 <code class="en-token">(String, Double, Double)</code> 改为 <code class="en-token">(String, GeoPoint)</code></li>
+      </ul>
+      <p><strong>2. SeckillOrderMessagePublisher — AMQP 3.x ReturnsCallback：</strong></p>
+<div class="pre-block"><pre><span class="tok-com">// 旧 API (Spring AMQP 2.x)</span>
+rabbitTemplate.setReturnCallback((message, replyCode, replyText, exchange, routingKey) -> { ... });
+
+<span class="tok-com">// 新 API (Spring AMQP 3.x)</span>
+rabbitTemplate.setReturnsCallback(returned -> {
+    <span class="tok-com">// returned.getMessage(), returned.getReplyCode(), returned.getExchange() ...</span>
+});
+</pre></div>
+      <p><strong>3. FollowServiceImpl — MyBatis-Plus 3.5.x count() 返回类型：</strong></p>
+      <p><code class="en-token">.count()</code> 从 <code class="en-token">Integer</code> 变为 <code class="en-token">Long</code>，修改变量声明即可。</p>
+    </div>
+  </article>
+</section>
+
+<!-- 6. Flow Diagram -->
+<section id="s6">
+  <h2>升级后 Agent 请求全流程</h2>
+  <div class="timeline">
+
+    <div class="tl-node">
+      <h3>1. 用户发起请求 <span class="tl-badge chg">改动</span></h3>
+      <div class="tl-method"><code class="en-token">POST /agent/recommend</code> · AgentController.recommend()</div>
+      <div class="tl-desc">接收 <code class="en-token">message</code> + 可选的 <code class="en-token">sessionId</code>。无 sessionId 时自动生成 12 位 hex。关联 session ↔ userId 到 Redis。</div>
+      <div class="branch-note">
+        <span class="branch-label">改动点</span>
+        <span class="branch-condition">手动 MemoryService.getWorkingMemory() → ChatMemory 自动注入</span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <h3>2. ChatClient 构建系统上下文 <span class="tl-badge new">新增</span></h3>
+      <div class="tl-method"><code class="en-token">ChatClient.prompt().user(message).advisors(...)</code> · RecommendationAgent</div>
+      <div class="tl-desc">ChatClient 将 system prompt、MessageChatMemoryAdvisor 注入的历史消息、当前 user 消息合并为完整 prompt。<strong>不再手写 messages 列表构建。</strong></div>
+      <div class="branch-note">
+        <span class="branch-label">分支</span>
+        <span class="branch-condition">如果 sessionId 对应有历史对话</span>
+        <span class="branch-arrow">→</span>
+        <span class="branch-result">MessageChatMemoryAdvisor 自动注入最近 N 轮对话</span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <h3>3. LLM 决策 + Tool 调用循环 <span class="tl-badge chg">简化</span></h3>
+      <div class="tl-method"><code class="en-token">ChatClient.call()</code> · Spring AI 内部处理</div>
+      <div class="tl-desc">LLM 返回 tool_calls → Spring AI 自动匹配 <code class="en-token">@Tool</code> 方法 → 类型转换参数 → 执行 → 结果回填。循环直到 LLM 返回纯文本。<strong>不再手写 8-round for 循环。</strong></div>
+      <div class="branch-note">
+        <span class="branch-label">改动前</span>
+        <span class="branch-condition">手写 JSONArray tool_calls 解析 + for 循环 + executeTool()</span>
+        <span class="branch-arrow">→</span>
+        <span class="branch-result">~50 行代码全部由 ChatClient 内部完成</span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <h3>4. 返回结果 + 记忆留存 <span class="tl-badge new">新增</span></h3>
+      <div class="tl-method"><code class="en-token">chatMemory.get() → 组装 dialogue → PreferenceExtractor.extractAsync()</code></div>
+      <div class="tl-desc">ChatMemory 自动保存本轮对话。Controller 从 ChatMemory 取出最近 20 条消息 → 拼成对话文本 → 异步调 PreferenceExtractor 提取偏好画像。</div>
+      <div class="branch-note">
+        <span class="branch-label">异步</span>
+        <span class="branch-condition">extractAsync() 不阻塞主流程</span>
+        <span class="branch-arrow">→</span>
+        <span class="branch-result">失败仅 log error，不影响用户本次回答</span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <h3>5. 语义记忆持久化 <span class="tl-badge chg">保留</span></h3>
+      <div class="tl-method"><code class="en-token">MemoryService.saveSemanticMemory(userId, profile)</code> · Redis Hash</div>
+      <div class="tl-desc">LLM 提取的 PreferenceProfile（菜系偏好、预算、氛围、confidence）写入 Redis Hash。<code class="en-token">UserProfileTool</code> 下次查询时自动附加 <code class="en-token">semanticMemory</code> 字段，Agent 即可个性化推荐。</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 7. Self-Test & Interview -->
+<section id="s7">
+  <h2>掌握度自测与面试追问</h2>
+
+  <h3 style="margin-top:28px;">基础理解</h3>
+  <div class="qa-card">
+    <details>
+      <summary>这次升级的核心动机是什么？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>技术选型判断力<br>
+        <strong>应答：</strong>Java 8 + Boot 2.3 是 2021 年的技术栈，Spring AI 不兼容。升级到 Boot 3.x + Java 17 后，可以用 Spring AI 标准模块替代 ~1000 行手写 Agent/RAG 基础设施代码，降低维护成本，同时和 ai-code-helper 的 LangChain4j 自研方案形成互补叙事——一个证明框架选型视野，一个证明底层理解。
+      </div>
+    </details>
+  </div>
+  <div class="qa-card">
+    <details>
+      <summary>为什么选 Spring AI 而不是 LangChain4j？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>框架对比能力<br>
+        <strong>应答：</strong>ai-code-helper 已经用 LangChain4j 自研了完整 Agent 框架（53 文件），再用 LangChain4j 等于两个项目技术同质化。Spring AI 是 Spring 生态的一等公民，自动配置完善，ChatClient API 声明式风格和 Boot 原生集成更自然。面试时能讲出两者优劣对比，比如 Spring AI 的 auto-config 更开箱即用，LangChain4j 的 Memory/Chain 抽象更灵活。
+      </div>
+    </details>
+  </div>
+
+  <h3 style="margin-top:28px;">代码实现</h3>
+  <div class="qa-card">
+    <details>
+      <summary>手写 Tool 接口改为 @Tool 注解后，工具注册流程发生了什么变化？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>Spring AI tool 机制理解<br>
+        <strong>应答：</strong>以前是每个 Tool 手写 getName/getDescription/getParametersSchema 三个方法，RecommendationAgent 手动调 buildToolDefs() 构造 JSON Schema 数组，execute 时手动 JSON 解析参数。现在 @Tool 注解的方法由 Spring AI 自动扫描，生成 ToolCallback，参数从 JSON String 变为类型安全的 Java 参数（Long shopId, Integer limit），ChatClient 在 tool calling 时自动完成参数类型转换和验证。
+      </div>
+    </details>
+  </div>
+  <div class="qa-card">
+    <details>
+      <summary>MessageChatMemoryAdvisor 替代手动 working memory 管理后，对话历史的生命周期由谁控制？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>ChatMemory 机制<br>
+        <strong>应答：</strong>当前用 InMemoryChatMemory，生命周期 = JVM 进程，按 conversationId 隔离。生产环境可以替换为 Redis-backed ChatMemory 实现（需手写，Spring AI 1.0 暂无内置 RedisChatMemory），或利用现有的 MemoryService.associateSessionUser 作为桥接。
+      </div>
+    </details>
+  </div>
+
+  <h3 style="margin-top:28px;">设计权衡</h3>
+  <div class="qa-card">
+    <details>
+      <summary>TokenTextSplitter 替代手写 TextChunker 丢失了什么能力？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>分块器选型权衡<br>
+        <strong>应答：</strong>手写 TextChunker 做了三件事 TokenTextSplitter 没做：① Markdown heading 层级感知 + breadcrumb 路径；② CJK 字符 1字符=1token 的启发式估算（中文场景比空格切词更准）；③ 段落级 overlap 抽取。TokenTextSplitter 用 BPE tokenizer 做真正的 token 计数，在中英混排场景更准确。生产建议用自定义 DocumentTransformer 补回 heading path 元数据。
+      </div>
+    </details>
+  </div>
+  <div class="qa-card">
+    <details>
+      <summary>如果 ChatClient 的 tool calling 陷入死循环怎么办？</summary>
+      <div class="qa-detail">
+        <strong>考察点：</strong>边界风险意识<br>
+        <strong>应答：</strong>原手写循环有硬上限 8 轮。ChatClient 默认无上限（或取决于模型 max_tokens）。可以通过 ChatClient.Builder 的 defaultOptions 设置或 prompt 中限制工具调用次数。生产建议加超时 + 监控告警。
+      </div>
+    </details>
+  </div>
+
+  <h3 style="margin-top:28px;">面试高频追问</h3>
+  <div class="interview-card">
+    <h3>"手写 Agent 和用 Spring AI，你觉得哪个更好？"</h3>
+    <div class="iv-row">
+      <span class="iv-tag kp">回答要点</span>
+      <span class="iv-tag bonus">加分点</span>
+      <span class="iv-tag pitfall">容易踩坑</span>
+    </div>
+    <p><strong>回答要点：</strong>没有绝对的好坏。手写 Agent 让你理解 tool calling 的每一个环节——prompt 构建、function schema 生成、tool_calls 解析、结果回填。用框架则聚焦业务逻辑，迭代更快。我在 ai-code-helper 项目里从零实现了一个完整 Agent 框架，在 CityLife Review 里用了 Spring AI，两种模式都经历过，能在面试中讲清不同选型的适用场景。</p>
+    <p><strong>加分点：</strong>能说出 Spring AI ChatClient 的 advisor 链模式（MessageChatMemoryAdvisor 只是其中一个 advisor，还可以加 QuestionAnswerAdvisor 做 RAG、自定义 advisor 做权限控制）。</p>
+    <p><strong>容易踩坑：</strong>不要把"用框架"说成"懒得手写"——要强调"知道底层原理后主动选择框架提升效率"。</p>
+  </div>
+  <div class="interview-card">
+    <h3>"这种大版本升级，你怎么保证不出问题？"</h3>
+    <div class="iv-row">
+      <span class="iv-tag kp">回答要点</span>
+      <span class="iv-tag bonus">加分点</span>
+      <span class="iv-tag pitfall">容易踩坑</span>
+    </div>
+    <p><strong>回答要点：</strong>分三步验证：① <code class="en-token">mvn clean compile</code> 确保零编译错误；② 跑全量单元测试（11 个测试 0 失败）；③ 业务代码改动量最小——Controller、Service、Mapper 层一行没改，只做了 javax→jakarta 的 import 替换。最大的改动在 Agent/RAG 层，这些是新增能力而非修改现有逻辑。</p>
+    <p><strong>加分点：</strong>能提到 docker-compose 同步升级（MySQL 5.7→8.0、ES 7.6→7.17）保证本地环境一致性。</p>
+    <p><strong>容易踩坑：</strong>不要把测试结果当成"完全没问题"——需要强调集成测试和端到端验证还需要在真实环境跑。</p>
+  </div>
+</section>
+
+<!-- 8. One Minute -->
+<section id="s8">
+  <div class="one-minute">
+    <h3>一分钟口述答案</h3>
+    <p>
+      这次升级把 CityLife Review 从 Java 8 + Spring Boot 2.3 整体迁到了 Java 17 + Spring Boot 3.4，核心动机是接入 Spring AI 标准化模块来替代手写的 Agent 和 RAG 基础设施。<br><br>
+      原来 RecommendationAgent 用 RestTemplate 手写 HTTP 调用和 tool calling 循环，五个工具各要手写 JSON Schema 的 Map 结构——光样板代码就上千行。现在 ChatClient 自动处理 tool loop，@Tool 注解自动生成 function schema，ChatMemory 自动管理对话历史，VectorStore 统一向量检索接口。<br><br>
+      31 个文件的 javax→jakarta 迁移全部通过编译，11 个存量单元测试零失败。业务层代码（Controller、Service、Mapper）一行没改，风险控制在 Agent/RAG 层。和 ai-code-helper 的自研框架形成互补——一个用 LangChain4j 从零造轮子证明底层理解，一个用 Spring AI 标准方案证明工程落地能力。
+    </p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+// Active TOC highlight
+(function() {
+  const nav = document.querySelector('.toc-sidebar nav');
+  if (!nav) return;
+  const links = nav.querySelectorAll('a');
+  const sections = [];
+  links.forEach(a => {
+    const id = a.getAttribute('href');
+    if (id && id.startsWith('#')) {
+      const el = document.querySelector(id);
+      if (el) sections.push({ el, a });
+    }
+  });
+  function update() {
+    let current = sections[0];
+    for (const s of sections) {
+      if (s.el.getBoundingClientRect().top <= 120) current = s;
+    }
+    links.forEach(l => l.classList.remove('active'));
+    if (current) current.a.classList.add('active');
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+</body>
+</html>

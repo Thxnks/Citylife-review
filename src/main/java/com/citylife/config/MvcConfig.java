@@ -7,7 +7,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {
@@ -25,7 +25,9 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/upload/**",
                         "/blog/hot",
                         "/user/code",
-                        "/user/login"
+                        "/user/login",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**"
                 ).order(1);
 
         registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))

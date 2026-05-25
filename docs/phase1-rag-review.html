@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 1 Review — 手写 RAG 管线</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 36px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 18px; line-height: 1.72; color: #111827; background: linear-gradient(180deg, #f8fafc 0%, #f3f6fb 42%, #f7f8fb 100%);
+}
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .en-token { font-family: Consolas, "Cascadia Code", "SF Mono", monospace; }
+
+/* ===== Layout ===== */
+.page-wrap { display: flex; width: 100%; max-width: 1560px; margin: 0; min-height: 100vh; }
+
+/* ===== Left TOC ===== */
+.toc-sidebar {
+  position: sticky; top: 0; height: 100vh; width: 278px; min-width: 278px;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-right: 1px solid #d8e0ec; padding: 34px 22px;
+  overflow-y: auto; font-size: 16px; z-index: 10; box-shadow: 8px 0 24px rgba(15, 23, 42, 0.035);
+}
+.toc-sidebar h2 { font-size: 18px; color: #111827; margin-bottom: 16px; font-weight: 700; }
+.toc-sidebar nav a {
+  display: block; padding: 8px 11px; border-radius: 10px; color: #4b5563;
+  margin-bottom: 3px; border-left: 3px solid transparent; transition: background .18s, color .18s, border-color .18s, transform .18s;
+}
+.toc-sidebar nav a:hover { background: #f1f5fb; color: #1d4ed8; text-decoration: none; }
+.toc-sidebar nav a.active { background: #eaf2ff; color: #1d4ed8; text-decoration: none; border-left-color: #2563eb; font-weight: 700; transform: translateX(2px); }
+.toc-sidebar nav a.sub { padding-left: 24px; font-size: 15px; }
+.toc-badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 4px; }
+.toc-badge.new { background: #dcfce7; color: #15803d; }
+
+/* ===== Main Content ===== */
+.main-content { flex: 1; max-width: 1240px; padding: 44px 58px 42vh; min-width: 0; }
+.main-content section { margin-bottom: 72px; scroll-margin-top: 36px; }
+.main-content h1 { font-size: 34px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+.main-content h2 {
+  font-size: 29px; font-weight: 700; color: #111827; margin-bottom: 18px;
+  padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;
+}
+.main-content h3 { font-size: 22px; font-weight: 600; color: #1f2937; margin: 22px 0 10px; }
+.main-content p, .main-content li { color: #374151; margin-bottom: 8px; }
+.main-content ul, .main-content ol { padding-left: 22px; margin-bottom: 12px; }
+
+/* ===== Hero Summary ===== */
+.hero-summary {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 58%, #f4f8ff 100%); border-radius: 8px; padding: 36px 40px; border: 1px solid #d8e0ec; box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+}
+.hero-summary h1 { border: none; padding: 0; margin-bottom: 4px; }
+.hero-subtitle { color: #6b7280; font-size: 17px; margin-bottom: 20px; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px;
+  border-radius: 20px; font-size: 14px; font-weight: 600;
+}
+.hero-tag.rec { background: #dcfce7; color: #15803d; }
+.hero-tag.risk { background: #fef3c7; color: #92400e; }
+.hero-tag.files { background: #dbeafe; color: #1d4ed8; }
+.hero-stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+.hero-stat {
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;
+  padding: 14px 20px; min-width: 100px;
+}
+.hero-stat .num { font-size: 28px; font-weight: 800; color: #111827; }
+.hero-stat .label { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+/* ===== Feature Grid ===== */
+.feature-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;
+}
+.feature-card {
+  background: #fff; border-radius: 8px; padding: 24px 26px; border: 1px solid #d8e0ec; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.045);
+}
+.feature-card h3 { margin-top: 0; font-size: 18px; }
+.feature-card .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; }
+.feature-tag {
+  font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.feature-tag.new { background: #dcfce7; color: #15803d; }
+.feature-tag.enhanced { background: #fff7ed; color: #c2410c; }
+.feature-tag.core { background: #dbeafe; color: #1d4ed8; }
+
+/* ===== Explain Strip ===== */
+.explain-strip {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 26px; row-gap: 34px; align-items: stretch;
+}
+.explain-col {
+  min-width: 0; height: 100%; background: #fff; border-radius: 8px;
+  padding: 22px 24px; border: 1px solid #d9dee7;
+}
+.explain-col h3 { margin-top: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.badge {
+  font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.badge-before { background: #fee2e2; color: #b91c1c; }
+.badge-after { background: #dcfce7; color: #15803d; }
+.badge-why { background: #dbeafe; color: #1d4ed8; }
+
+/* ===== Code Panel ===== */
+.code-panel {
+  background: #fff; border-radius: 8px; border: 1px solid #d8e0ec; margin-bottom: 28px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+.code-panel-header {
+  padding: 14px 20px; border-bottom: 1px solid #e5e7eb;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.code-panel-header h3 { margin: 0; font-size: 17px; }
+.code-panel-header .file-path { font-size: 14px; color: #64748b; font-family: Consolas, "Cascadia Code", monospace; }
+.code-panel-body { padding: 18px 20px; }
+.code-panel-body p.desc { color: #4b5563; margin-bottom: 14px; font-size: 16px; }
+.code-block {
+  background: #1e1e2e; color: #cdd6f4; border-radius: 6px; padding: 16px 20px;
+  overflow-x: auto; font-size: 15px; line-height: 1.6;
+  margin-bottom: 14px;
+}
+.code-block .tok-kw { color: #cba6f7; }
+.code-block .tok-str { color: #a6e3a1; }
+.code-block .tok-cm { color: #6c7086; font-style: italic; }
+.code-block .tok-type { color: #f9e2af; }
+.code-block .tok-method { color: #89b4fa; }
+.code-block .tok-num { color: #fab387; }
+.code-block .tok-ann { color: #f38ba8; }
+.code-block .tok-var { color: #cdd6f4; }
+.hl-line { display: block; background: rgba(137, 180, 250, 0.12); margin: 0 -20px; padding: 0 20px; border-left: 3px solid #89b4fa; }
+.review-focus {
+  background: #fffbeb; border-left: 3px solid #f59e0b; padding: 10px 14px;
+  border-radius: 0 6px 6px 0; font-size: 15px; color: #92400e; margin-top: 10px;
+}
+.review-focus strong { color: #b45309; }
+.risk-note {
+  background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px;
+  border-radius: 0 6px 6px 0; font-size: 15px; color: #991b1b; margin-top: 10px;
+}
+.risk-note strong { color: #b91c1c; }
+
+/* ===== Timeline Flow ===== */
+.flow-stage { margin-bottom: 28px; }
+.flow-stage-title {
+  font-size: 19px; font-weight: 700; color: #1d4ed8; margin-bottom: 12px;
+  padding: 6px 14px; background: #eff6ff; border-radius: 6px; display: inline-block;
+}
+.timeline { position: relative; padding-left: 40px; }
+.timeline::before {
+  content: ''; position: absolute; left: 17px; top: 8px; bottom: 8px;
+  width: 2px; background: #d9dee7;
+}
+.tl-node { position: relative; margin-bottom: 16px; }
+.tl-node::before {
+  content: attr(data-step); position: absolute; left: -38px; top: 6px;
+  width: 28px; height: 28px; border-radius: 50%; background: #2563eb;
+  color: #fff; font-size: 13px; font-weight: 700; display: flex;
+  align-items: center; justify-content: center; line-height: 1;
+}
+.tl-node.new-step::before { background: #15803d; }
+.tl-card {
+  background: #fff; border: 1px solid #d8e0ec; border-radius: 8px; padding: 18px 22px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+.tl-card .cn-title { font-size: 18px; font-weight: 600; color: #111827; }
+.tl-card .en-method { font-family: Consolas, "Cascadia Code", monospace; font-size: 15.5px; color: #1d4ed8; margin: 5px 0 7px; letter-spacing: 0; }
+.tl-card .cn-explain { font-size: 16px; color: #4b5563; }
+.tl-label { font-size: 11px; padding: 1px 7px; border-radius: 3px; font-weight: 600; margin-left: 6px; }
+.tl-label.new { background: #dcfce7; color: #15803d; }
+.tl-label.mod { background: #fff7ed; color: #c2410c; }
+.tl-branch {
+  margin: 10px 0 0 0; padding: 10px 13px; font-size: 15.5px; color: #475569;
+  background: #f8fafc; border: 1px solid #d8e0ec; border-left: 3px solid #93c5fd;
+  border-radius: 7px; display: flex; align-items: flex-start; gap: 10px;
+}
+.tl-branch::before {
+  content: '分支'; flex: 0 0 auto; font-size: 12px; font-weight: 700; color: #1d4ed8;
+  background: #dbeafe; border-radius: 4px; padding: 2px 7px; margin-top: 1px;
+}
+.tl-branch .branch-text { flex: 1; min-width: 0; }
+.tl-branch .branch-condition { color: #1f2937; font-weight: 700; }
+.tl-branch .branch-arrow { color: #94a3b8; padding: 0 7px; }
+.tl-branch .branch-result { color: #475569; }
+
+/* ===== QA Card ===== */
+.qa-card {
+  background: #fff; border-radius: 8px; border: 1px solid #d9dee7; margin-bottom: 14px;
+}
+.qa-card summary {
+  padding: 18px 22px; cursor: pointer; font-size: 18px; font-weight: 700; color: #111827;
+  list-style: none; display: grid; grid-template-columns: 1fr auto; column-gap: 18px;
+  align-items: center; line-height: 1.45;
+}
+.qa-card summary::-webkit-details-marker { display: none; }
+.qa-card summary::after { content: '▸'; font-size: 14px; color: #94a3b8; transition: transform .2s; justify-self: end; }
+.qa-card[open] summary::after { transform: rotate(90deg); }
+.qa-card-body { padding: 0 20px 18px; font-size: 16px; }
+.qa-card-body .hint { color: #6b7280; font-size: 14px; margin-bottom: 8px; }
+.qa-card-body .answer { background: #f9fafb; border-radius: 6px; padding: 12px 16px; color: #374151; }
+.qa-tag {
+  display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 3px;
+  font-weight: 600; margin-right: 6px;
+}
+.qa-tag.basic { background: #dbeafe; color: #1d4ed8; }
+.qa-tag.impl { background: #dcfce7; color: #15803d; }
+.qa-tag.design { background: #fef3c7; color: #92400e; }
+
+/* ===== Interview Card ===== */
+.interview-card {
+  background: #fff; border-radius: 8px; border: 1px solid #d9dee7; padding: 20px 24px; margin-bottom: 16px;
+}
+.interview-card h3 { margin-top: 0; font-size: 18px; color: #111827; }
+.interview-points { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.interview-point {
+  flex: 1; min-width: 200px; padding: 12px 16px; border-radius: 6px; font-size: 15px;
+}
+.interview-point.kp { background: #eff6ff; }
+.interview-point.bonus { background: #f0fdf4; }
+.interview-point.pitfall { background: #fef2f2; }
+.interview-point h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.interview-point.kp h4 { color: #1d4ed8; }
+.interview-point.bonus h4 { color: #15803d; }
+.interview-point.pitfall h4 { color: #b91c1c; }
+
+/* ===== One Minute ===== */
+.one-minute {
+  background: linear-gradient(135deg, #eaf2ff 0%, #eefdf5 100%);
+  border-radius: 8px; border: 1px solid #bfdbfe; padding: 34px 38px; box-shadow: 0 16px 36px rgba(37, 99, 235, 0.08);
+}
+.one-minute h2 { border: none; padding: 0; margin-bottom: 14px; }
+.one-minute p { font-size: 19px; color: #1e3a5f; line-height: 1.85; }
+
+/* ===== Soft Surface Polish ===== */
+:root {
+  --surface-radius: 14px;
+  --surface-radius-sm: 10px;
+  --surface-border: #dfe6f1;
+  --surface-shadow: 0 14px 34px rgba(15, 23, 42, 0.055);
+  --surface-shadow-soft: 0 8px 22px rgba(15, 23, 42, 0.04);
+}
+.hero-summary,
+.feature-card,
+.explain-col,
+.code-panel,
+.tl-card,
+.qa-card,
+.interview-card,
+.one-minute {
+  border-radius: var(--surface-radius);
+  border-color: var(--surface-border);
+  box-shadow: var(--surface-shadow-soft);
+}
+.hero-summary, .one-minute { box-shadow: var(--surface-shadow); }
+.hero-stat, .hero-tag, .feature-tag, .badge, .toc-badge,
+.tl-label, .qa-tag, .interview-point, .tl-branch,
+.review-focus, .code-block, .flow-stage-title, .qa-card-body .answer {
+  border-radius: var(--surface-radius-sm);
+}
+.code-block { border-radius: 12px; }
+.review-focus, .risk-note { border-radius: 12px; }
+.tl-branch { border-radius: 11px; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.035); }
+.interview-point { border: 1px solid rgba(148, 163, 184, 0.18); }
+
+/* ===== QA Single Column Override ===== */
+#self-test {
+  display: block !important;
+}
+#self-test details.qa-card {
+  display: block !important; width: 100% !important; max-width: none !important;
+  float: none !important; clear: both !important; margin: 0 0 18px 0 !important;
+  break-inside: avoid;
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 900px) {
+  .page-wrap { flex-direction: column; }
+  .toc-sidebar {
+    position: static; height: auto; width: 100%; min-width: 0;
+    padding: 16px; border-right: none; border-bottom: 1px solid #d9dee7;
+  }
+  .toc-sidebar nav { display: flex; gap: 8px; overflow-x: auto; flex-wrap: wrap; }
+  .toc-sidebar nav a { white-space: nowrap; font-size: 13px; }
+  .main-content { padding: 24px 16px 60px; }
+  .hero-stat-row { gap: 10px; }
+  .hero-stat { min-width: 70px; padding: 10px 14px; }
+  .hero-stat .num { font-size: 22px; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .explain-strip { grid-template-columns: 1fr; row-gap: 18px; }
+  .code-panel-body { padding: 14px; }
+  .code-block { font-size: 13px; padding: 12px; }
+  .timeline { padding-left: 32px; }
+  .tl-node::before { left: -30px; width: 22px; height: 22px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+<!-- ====== LEFT TOC ====== -->
+<aside class="toc-sidebar">
+  <h2>RAG 管线复盘</h2>
+  <nav id="toc-nav">
+    <a href="#overview">改动总览</a>
+    <a href="#features" class="sub">核心能力矩阵</a>
+    <a href="#motivation">问题与设计动机</a>
+    <a href="#code-walkthrough" class="sub">代码详细解读</a>
+    <a href="#code-chunker" class="sub">　TextChunker</a>
+    <a href="#code-vector" class="sub">　InMemoryVectorStore</a>
+    <a href="#code-rag" class="sub">　RAGService</a>
+    <a href="#code-tool" class="sub">　ReviewSearchTool</a>
+    <a href="#flow">详细流程图</a>
+    <a href="#self-test">掌握度自测</a>
+    <a href="#interview">面试高频追问</a>
+    <a href="#one-min">一分钟口述答案</a>
+  </nav>
+</aside>
+
+<!-- ====== MAIN CONTENT ====== -->
+<main class="main-content">
+
+<!-- ===== 1. HERO SUMMARY ===== -->
+<section id="overview" class="hero-summary">
+  <h1>Phase 1：手写 RAG 管线</h1>
+  <p class="hero-subtitle">CityLife Review — Agent 语义点评检索 · 从 chunking 到 cosine similarity 全链路自建</p>
+
+  <div class="hero-meta">
+    <span class="hero-tag rec">&#x2705; 推荐合并 · 编译通过，测试全绿</span>
+    <span class="hero-tag risk">&#x26A0;&#xFE0F; 风险等级：低 · 独立 rag/ 包，不侵入业务逻辑</span>
+    <span class="hero-tag files">&#x1F4C1; 9 个新增文件 + 3 个修改文件</span>
+  </div>
+
+  <div class="hero-stat-row">
+    <div class="hero-stat">
+      <div class="num">9</div>
+      <div class="label">rag/ 新增 Java 文件</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">3</div>
+      <div class="label">现有文件修改</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">17</div>
+      <div class="label">单元测试全部通过</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">5</div>
+      <div class="label">RAG 管线组件</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">2</div>
+      <div class="label">接口抽象层</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">1</div>
+      <div class="label">Agent Tool 集成</div>
+    </div>
+  </div>
+
+  <p style="margin-top:18px;font-size:16px;color:#4b5563;">
+    <strong>核心价值：</strong>这不是调用 LangChain 或 Spring AI 的 "调包" 项目，而是从零手写了完整的 RAG 管线：
+    <code style="background:#eff6ff;padding:2px 6px;border-radius:3px;">Markdown 分块 → OpenAI embedding → 余弦相似度检索 → Agent Tool 集成 → 引用标注回答</code>。
+    每个组件都留了接口抽象，向量存储可从内存实现无缝迁移到 Redis Stack 或 Qdrant。面试时可以讲清每一层的数学原理和工程取舍。
+  </p>
+</section>
+
+<!-- ===== 2. FEATURE GRID ===== -->
+<section id="features">
+  <h2>核心能力矩阵</h2>
+  <div class="feature-grid">
+
+    <div class="feature-card">
+      <h3>语义点评搜索</h3>
+      <div class="tag-row">
+        <span class="feature-tag core">Agent Tool</span>
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p>Agent 可调用 <code>searchReviews</code> 用自然语言在全部点评中做语义检索。一次调用精准命中相关信息，避免逐店拉取点评的 token 浪费。</p>
+      <p style="font-size:14px;color:#6b7280;">ReviewSearchTool.java</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>Markdown 感知文本分块</h3>
+      <div class="tag-row">
+        <span class="feature-tag core">RAG 基础</span>
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p>按标题层级切分 + 段落合并 + CJK token 估算 + chunk overlap。超长段落强制在句号处断开，保证语义完整。中英文混合 token 估算正确。</p>
+      <p style="font-size:14px;color:#6b7280;">TextChunker.java</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>OpenAI 兼容 Embedding</h3>
+      <div class="tag-row">
+        <span class="feature-tag core">RAG 基础</span>
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p>复用现有 <code>AgentProperties</code> 的 baseUrl + apiKey，调用 <code>POST /v1/embeddings</code>。支持批量输入（每批 20 个 chunk），自动记录维度。</p>
+      <p style="font-size:14px;color:#6b7280;">OpenAIEmbeddingService.java</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>内存向量存储 + 余弦检索</h3>
+      <div class="tag-row">
+        <span class="feature-tag core">RAG 基础</span>
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p><code>CopyOnWriteArrayList</code> 保证读多写少场景的线程安全。Brute-force 余弦相似度检索，O(N·dim)。接口抽象可替换为 ANN 实现。</p>
+      <p style="font-size:14px;color:#6b7280;">InMemoryVectorStore.java</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>启动自动索引</h3>
+      <div class="tag-row">
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p><code>@PostConstruct</code> 读取全量 Blog → 分块 → embedding → 写入向量库。失败静默降级（log error），不阻塞应用启动。</p>
+      <p style="font-size:14px;color:#6b7280;">ReviewIndexService.java</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>引用标注体系</h3>
+      <div class="tag-row">
+        <span class="feature-tag new">新增</span>
+      </div>
+      <p>检索结果带 <code>[1]</code> <code>[2]</code> 引用编号 + blogId 溯源。Agent system prompt 要求回答中标注信息来源，提升推荐可信度。</p>
+      <p style="font-size:14px;color:#6b7280;">RAGService.buildContext()</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ===== 3. BEFORE / AFTER / WHY ===== -->
+<section id="motivation">
+  <h2>问题与设计动机</h2>
+
+  <div class="explain-strip" style="margin-bottom:20px;">
+    <div class="explain-col">
+      <h3><span class="badge badge-before">改动前</span> 按店铺查点评的局限</h3>
+      <p>Agent 只能通过 <code>getShopBlogs</code> 按店铺 ID 精确拉取点评。用户问<em>"哪家火锅店环境最好？"</em>时，Agent 必须先搜出所有火锅店，再逐店调 Tool 拉点评。N 个店铺 = N+1 次 Tool 调用，常触发 8 轮限制。</p>
+    </div>
+    <div class="explain-col">
+      <h3><span class="badge badge-after">改动后</span> 跨店铺语义搜索</h3>
+      <p>Agent 调一次 <code>searchReviews</code>，直接在全局点评中做语义检索。问题从"逐个店铺查"变成"一次查询全局命中"。检索结果带相似度排序和引用编号，LLM 可据此生成有信息来源的推荐。</p>
+    </div>
+    <div class="explain-col">
+      <h3><span class="badge badge-why">设计理由</span> 面试驱动：全手写 = 全链路可讲</h3>
+      <p>不用 Spring AI / LangChain4j，因为面试时会被质疑"你只是调了个 API"。手写分块器、embedding 调用、余弦相似度检索、Tool 集成，每个环节都能展示对底层原理的理解。接口抽象让生产替换路径清晰。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 4. CODE WALKTHROUGH ===== -->
+<section id="code-walkthrough">
+  <h2>详细代码解读</h2>
+
+  <!-- TextChunker -->
+  <div class="code-panel" id="code-chunker">
+    <div class="code-panel-header">
+      <h3>TextChunker — Markdown 结构感知分块器</h3>
+      <span class="file-path">src/main/java/com/citylife/rag/TextChunker.java</span>
+    </div>
+    <div class="code-panel-body">
+      <p class="desc"><strong>文件职责：</strong>将 Markdown 文本按标题层级 + 段落 + token 预算切分为语义连贯的 chunk。对 CJK 字符做特殊 token 估算（1 字符 = 1 token），超长段落强制在句号/感叹号处断开。</p>
+      <p class="desc"><strong>关键改动：</strong><code>chunk()</code> 主入口、<code>splitByHeadings()</code> 标题层级解析、<code>mergeByTokens()</code> token 预算合并 + overlap、<code>splitLongParagraph()</code> 超长段落强制切分。</p>
+
+      <div class="code-block"><pre><span class="tok-kw">public class</span> <span class="tok-type">TextChunker</span> {
+    <span class="tok-kw">private final int</span> chunkTokens;   <span class="tok-cm">// 每个 chunk 上限（token 数）</span>
+    <span class="tok-kw">private final int</span> overlapTokens;  <span class="tok-cm">// 相邻 chunk 重叠量</span>
+
+    <span class="tok-kw">public</span> List&lt;TextChunk&gt; <span class="tok-method">chunk</span>(String text, String sourceType, String documentId) {
+        List&lt;Section&gt; sections = <span class="tok-method">splitByHeadings</span>(text);  <span class="tok-cm">// 按 # 标题解析层级</span>
+        <span class="tok-cm">// 对每个 Section：splitParagraphs → mergeByTokens → splitLongParagraph</span>
+        <span class="tok-cm">// 每个 chunk 携带 headingPath breadcrumb 元数据</span>
+    }
+
+    <span class="tok-kw">int</span> <span class="tok-method">approxTokenLen</span>(String text) {
+        <span class="tok-cm">// CJK 字符 → 1 token；英文按空格切词 → 1 word ≈ 1 token</span>
+        <span class="tok-cm">// 面试加分：用 Unicode Block 判断，不是 char range</span>
+    }
+
+    <span class="tok-type">boolean</span> <span class="tok-method">isCJK</span>(<span class="tok-kw">char</span> c) {
+        <span class="tok-cm">// 覆盖 CJK Unified Ideographs + Extensions A–E</span>
+        <span class="tok-cm">// 含日文假名 + 韩文，比简单 char range 更准确</span>
+    }
+}</pre></div>
+
+      <div class="review-focus">
+        <strong>Review 重点：</strong>
+        <ul style="margin:6px 0 0 16px;font-size:15px;">
+          <li><code>splitLongParagraph()</code> 在句号/感叹号/换行处断开，而非硬切 — 保持语义完整性</li>
+          <li><code>approxTokenLen()</code> 是估算值，生产可用 JTokkit 等精确 tokenizer 替换</li>
+          <li>overlap 提取从末尾按 token 数回溯，确保相邻 chunk 共享足够上下文</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- InMemoryVectorStore -->
+  <div class="code-panel" id="code-vector">
+    <div class="code-panel-header">
+      <h3>InMemoryVectorStore — 内存向量存储</h3>
+      <span class="file-path">src/main/java/com/citylife/rag/impl/InMemoryVectorStore.java</span>
+    </div>
+    <div class="code-panel-body">
+      <p class="desc"><strong>文件职责：</strong>基于 <code>CopyOnWriteArrayList</code> 的线程安全内存向量存储。Brute-force 余弦相似度检索。实现了 <code>VectorStore</code> 接口，生产可替换为 Redis Stack 或 Qdrant。</p>
+
+      <div class="code-block"><pre><span class="tok-ann">@Component</span>
+<span class="tok-kw">public class</span> <span class="tok-type">InMemoryVectorStore</span> <span class="tok-kw">implements</span> <span class="tok-type">VectorStore</span> {
+    <span class="tok-kw">private final</span> List&lt;Entry&gt; entries = <span class="tok-kw">new</span> CopyOnWriteArrayList&lt;&gt;();
+
+    <span class="tok-kw">public</span> List&lt;SearchResult&gt; <span class="tok-method">search</span>(<span class="tok-kw">float</span>[] query, <span class="tok-kw">int</span> topK, String sourceType) {
+        <span class="tok-cm">// 遍历过滤 sourceType → 计算余弦相似度 → 排序 → topK</span>
+        <span class="tok-cm">// O(N·dim)，N &lt; 10^5 可用；大规模用 HNSW / IVF</span>
+    }
+
+    <span class="tok-kw">public static double</span> <span class="tok-method">cosineSimilarity</span>(<span class="tok-kw">float</span>[] a, <span class="tok-kw">float</span>[] b) {
+        <span class="tok-cm">// cos(θ) = A·B / (||A|| · ||B||)</span>
+        <span class="tok-cm">// 分母为 0 → 返回 0（零向量保护）</span>
+    }
+}</pre></div>
+
+      <div class="review-focus">
+        <strong>Review 重点：</strong> CosineOnWriteArrayList 读操作无锁（适合读多写少），但写操作全量复制 — 大批量写入时内存峰值 ×2。用于启动时一次性加载是安全的。生产环境推荐 Redis Stack 的 <code>FT.SEARCH</code> 做 HNSW 近似检索。
+      </div>
+      <div class="risk-note">
+        <strong>潜在风险：</strong> 10 万条 × 1536 维 × 4 字节 ≈ 600MB 内存。当 Blog 数据量增长时需提前切换到外部向量数据库。
+      </div>
+    </div>
+  </div>
+
+  <!-- RAGService -->
+  <div class="code-panel" id="code-rag">
+    <div class="code-panel-header">
+      <h3>RAGService — 检索编排层</h3>
+      <span class="file-path">src/main/java/com/citylife/rag/RAGService.java</span>
+    </div>
+    <div class="code-panel-body">
+      <p class="desc"><strong>文件职责：</strong>负责 RAG 的 Retrieve + Augment 两个阶段。Generation 阶段交给 Agent 的 LLM — 因为 Agent 需要结合用户画像、其他 Tool 结果、system prompt 风格做综合回答，单个 RAG 模块不应该越权。</p>
+
+      <div class="code-block"><pre><span class="tok-kw">public</span> List&lt;RetrievalResult&gt; <span class="tok-method">search</span>(String query, <span class="tok-kw">int</span> topK, String sourceType) {
+    <span class="tok-cm">// 1. query → embedding</span>
+    List&lt;<span class="tok-kw">float</span>[]&gt; embeddings = embeddingService.embed(List.of(query));
+    <span class="tok-cm">// 2. vectorStore.search</span>
+    List&lt;SearchResult&gt; results = vectorStore.search(embeddings.get(<span class="tok-num">0</span>), topK, sourceType);
+    <span class="tok-cm">// 3. 包装为 RetrievalResult（带 citationIndex [1][2]...）</span>
+}
+
+<span class="tok-kw">public</span> String <span class="tok-method">buildContext</span>(List&lt;RetrievalResult&gt; results, <span class="tok-kw">double</span> minScore) {
+    <span class="tok-cm">// 过滤低分 → 拼接为结构化上下文字符串</span>
+    <span class="tok-cm">// 格式：--- [N] (headingPath) ---\n chunk文本\n (blogId, 相似度)</span>
+}</pre></div>
+
+      <div class="review-focus">
+        <strong>Review 重点：</strong> <code>search()</code> 不调用 LLM — 职责边界清晰。Generation 交给 Agent，Agent 拿到检索结果后可结合用户画像、其他 Tool 结果综合生成，这是单个 RAGService 做不到的灵活性。
+      </div>
+    </div>
+  </div>
+
+  <!-- ReviewSearchTool -->
+  <div class="code-panel" id="code-tool">
+    <div class="code-panel-header">
+      <h3>ReviewSearchTool — Agent Tool 接入点</h3>
+      <span class="file-path">src/main/java/com/citylife/agent/tool/ReviewSearchTool.java</span>
+    </div>
+    <div class="code-panel-body">
+      <p class="desc"><strong>文件职责：</strong>实现 <code>Tool</code> 接口，将 RAG 能力注入 Agent 的 tool-calling loop。<code>RecommendationAgent</code> 通过构造函数注入的 <code>List&lt;Tool&gt;</code> 自动发现并注册所有 Tool 实现。</p>
+
+      <div class="code-block"><pre><span class="tok-ann">@Component</span>
+<span class="tok-kw">public class</span> <span class="tok-type">ReviewSearchTool</span> <span class="tok-kw">implements</span> <span class="tok-type">Tool</span> {
+
+    <span class="tok-kw">public</span> String <span class="tok-method">getName</span>() { <span class="tok-kw">return</span> <span class="tok-str">"searchReviews"</span>; }
+
+    <span class="tok-kw">public</span> Map&lt;String, Object&gt; <span class="tok-method">getParametersSchema</span>() {
+        <span class="tok-cm">// query: string — 语义搜索查询，用自然语言描述想找的内容</span>
+        <span class="tok-cm">// topK: integer — 返回条数，默认 3，最大 5</span>
+    }
+
+    <span class="tok-kw">public</span> String <span class="tok-method">execute</span>(String argumentsJson) {
+        <span class="tok-cm">// 解析 query + topK → ragService.search() → JSON 返回带引用的结果</span>
+        <span class="tok-cm">// 无结果时返回 {"message": "...", "results": []}</span>
+        <span class="tok-cm">// Agent 拿到 JSON → 下一轮 LLM → 生成自然语言推荐 + [1][2] 引用</span>
+    }
+}</pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 5. FLOW DIAGRAM ===== -->
+<section id="flow">
+  <h2>详细流程：语义搜索全链路</h2>
+
+  <div class="flow-stage">
+    <div class="flow-stage-title">1. 启动索引阶段</div>
+    <div class="timeline">
+      <div class="tl-node new-step" data-step="1">
+        <div class="tl-card">
+          <div class="cn-title">读取全量点评 <span class="tl-label new">新增</span></div>
+          <div class="en-method">ReviewIndexService.init() — @PostConstruct</div>
+          <div class="cn-explain">调用 <code>IBlogService.list()</code> 读取全部 Blog 记录。每条的 title + content 合并后送入分块器。</div>
+          <div class="tl-branch">
+            <div class="branch-text">
+              <span class="branch-condition">如果 Blog 表为空</span>
+              <span class="branch-arrow">→</span>
+              <span class="branch-result">log warn，跳过索引。Agent 的 searchReviews 将返回空结果，自然回退到原有推荐路径。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-node new-step" data-step="2">
+        <div class="tl-card">
+          <div class="cn-title">文本分块 <span class="tl-label new">新增</span></div>
+          <div class="en-method">TextChunker.chunk(text, "blog", blogId)</div>
+          <div class="cn-explain">标题层级解析 → 段落切分 → CJK token 估算合并 → 生成带 <code>headingPath</code> 元数据的 chunk 列表。超长段落强制在句号处断开。</div>
+        </div>
+      </div>
+
+      <div class="tl-node new-step" data-step="3">
+        <div class="tl-card">
+          <div class="cn-title">批量 Embedding <span class="tl-label new">新增</span></div>
+          <div class="en-method">OpenAIEmbeddingService.embed(texts) — POST /v1/embeddings</div>
+          <div class="cn-explain">每批最多 20 个 chunk，发送到 OpenAI 兼容 API。返回 float[] 向量，维度由模型决定（如 text-embedding-3-small = 1536）。</div>
+          <div class="tl-branch">
+            <div class="branch-text">
+              <span class="branch-condition">如果 API 不可用（key 为空 / 网络不通）</span>
+              <span class="branch-arrow">→</span>
+              <span class="branch-result">catch 异常 + log error + 继续启动。RAG 功能静默降级，ReviewSearchTool 返回空结果。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-node new-step" data-step="4">
+        <div class="tl-card">
+          <div class="cn-title">写入向量存储 <span class="tl-label new">新增</span></div>
+          <div class="en-method">InMemoryVectorStore.addAll(chunks)</div>
+          <div class="cn-explain">Thread-safe 写入。至此全量点评的向量索引就绪，等待查询。后续可扩展为 MQ 事件驱动的增量索引。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-stage">
+    <div class="flow-stage-title">2. 运行时查询阶段</div>
+    <div class="timeline">
+      <div class="tl-node" data-step="5">
+        <div class="tl-card">
+          <div class="cn-title">用户发起请求</div>
+          <div class="en-method">POST /agent/recommend → AgentController</div>
+          <div class="cn-explain">用户输入自然语言："哪家火锅店环境最好？" → Controller 转发到 RecommendationAgent。</div>
+        </div>
+      </div>
+
+      <div class="tl-node" data-step="6">
+        <div class="tl-card">
+          <div class="cn-title">LLM 决策调用 Tool</div>
+          <div class="en-method">RecommendationAgent.recommend() — tool-calling loop</div>
+          <div class="cn-explain">LLM 分析用户意图，判断调用 <code>searchReviews</code> 比逐店拉取点评更高效。Tool 定义通过 <code>buildToolDefs()</code> 序列化后传入每次请求。</div>
+        </div>
+      </div>
+
+      <div class="tl-node new-step" data-step="7">
+        <div class="tl-card">
+          <div class="cn-title">语义检索 <span class="tl-label new">新增</span></div>
+          <div class="en-method">ReviewSearchTool → RAGService.search(query, topK, "blog")</div>
+          <div class="cn-explain">查询文本 → embedding → VectorStore 余弦检索 → 返回带 citation 编号的结果 JSON。</div>
+        </div>
+      </div>
+
+      <div class="tl-node" data-step="8">
+        <div class="tl-card">
+          <div class="cn-title">LLM 合成回答</div>
+          <div class="en-method">Agent 收到 tool 结果 → 注入 messages → next LLM turn</div>
+          <div class="cn-explain">LLM 根据检索到的点评片段 + 引用编号，结合用户画像和其他 Tool 结果，生成带信息来源标注的自然语言推荐。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 6. SELF TEST ===== -->
+<section id="self-test">
+  <h2>掌握度自测与面试追问</h2>
+
+  <h3 style="margin-bottom:14px; color:#4b5563;">基础理解</h3>
+
+  <details class="qa-card">
+    <summary>这次改动新增了哪些核心能力？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag basic">考察点</span> 对改动范围的整体把握</div>
+      <div class="answer">
+        <strong>应答关键词：</strong>语义点评搜索、Markdown 感知分块、CJK token 估算、OpenAI embedding 集成、余弦相似度检索、启动自动索引、引用标注。<br><br>
+        核心是让 Agent 能够<strong>跨店铺</strong>用自然语言搜索全部点评内容，而非只能逐店拉取。底层完整实现了分块 → 向量化 → 检索 → 引用输出的四阶段链路，每个阶段都手写而非调库。
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>RAG 的三个阶段分别由哪个类负责？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag basic">考察点</span> RAG 架构理解</div>
+      <div class="answer">
+        <strong>Retrieve：</strong><code>RAGService.search()</code> — embedding + 向量检索<br>
+        <strong>Augment：</strong><code>RAGService.buildContext()</code> — 拼接带引用的上下文<br>
+        <strong>Generate：</strong><code>RecommendationAgent</code> 的 LLM — 将上下文注入对话后生成最终回答<br><br>
+        关键设计：生成权交给 Agent 而非 RAGService。Agent 拿到检索结果后可结合用户画像、其他 Tool 结果、system prompt 风格做综合回答。
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>为什么默认不影响原有流程？失败时如何 fallback？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag basic">考察点</span> 容错设计</div>
+      <div class="answer">
+        RAG 代码在独立的 <code>rag/</code> 包中，不修改任何现有业务逻辑。<br>
+        <code>ReviewIndexService.init()</code> 的 try-catch 确保 embedding API 不可用时应用仍正常启动。<br>
+        <code>ReviewSearchTool</code> 返回空结果时，Agent 自然走原有推荐路径（searchShops → getShopBlogs），不会报错。
+      </div>
+    </div>
+  </details>
+
+  <h3 style="margin:28px 0 14px; color:#4b5563;">代码实现</h3>
+
+  <details class="qa-card">
+    <summary>TextChunker 的 CJK token 估算为什么重要？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">考察点</span> 分块策略的细节</div>
+      <div class="answer">
+        中文字符间没有空格分隔，每个汉字 ≈ 1 token（英文需按空格切词）。如果用英文逻辑（按空格分词），整段中文会被当成一个巨型 "word"，分块功能失效。<br><br>
+        <strong>加分回答：</strong>用 Unicode Block（CJK_UNIFIED_IDEOGRAPHS + Extensions A~E + 假名 + 韩文）而非简单的 char range 判断。同时承认 <code>approxTokenLen</code> 是估算值，生产可用 JTokkit 等精确 tokenizer 替换。
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>InMemoryVectorStore 为什么用 CosineOnWriteArrayList？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">考察点</span> 并发安全设计</div>
+      <div class="answer">
+        <code>ReviewIndexService</code>（启动时 @PostConstruct 写）和 <code>ReviewSearchTool</code>（运行时请求读）存在并发场景。<br>
+        COWAL 读操作无锁（只需底层数组的 volatile 读）、写操作全量复制。适合读多写少的场景（本项目写只在启动时一次，后续全是读）。<br><br>
+        <strong>关键局限：</strong>认 COWAL 写时全量复制导致内存峰值 ×2。生产环境应换成 Redis Stack 或 Qdrant 等外部服务。
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>Embedding 的 batch size = 20 是怎么定的？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">考察点</span> API 调用的工程考量</div>
+      <div class="answer">
+        OpenAI embedding API 对 input 数组长度没有硬性限制，但 token 总量受模型上下文窗口约束。<br>
+        20 个 chunk × 500 token ≈ 10,000 token，但 text-embedding-3-small 的单次限制是 8191 token —— <strong>这里实际上对 token 量估算偏乐观</strong>。<br>
+        因为是演示项目 + 数据量极小（~10 条），所以取了宽松值。生产环境应该改成 8-10 个 chunk/批，或增加 token 量预检。
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>ReviewSearchTool 返回的 JSON 在 Agent 循环中怎么被使用？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">考察点</span> Agent tool-calling loop 理解</div>
+      <div class="answer">
+        <code>RecommendationAgent</code> 的 tool-calling loop 中：<br>
+        1. Tool 被执行 → 返回 JSON 字符串<br>
+        2. 作为 <code>role: "tool"</code> 消息追加到 messages 列表<br>
+        3. 下一轮 LLM 调用时，LLM 看到 tool 返回的 JSON + 之前的对话历史<br>
+        4. LLM 决策是否还需要更多工具调用，或生成最终回答<br>
+        5. 如果生成最终回答，LLM 会按 system prompt 要求用 [1][2] 标注引用来源
+      </div>
+    </div>
+  </details>
+
+  <h3 style="margin:28px 0 14px; color:#4b5563;">设计权衡</h3>
+
+  <details class="qa-card">
+    <summary>为什么 RAG 的 Generation 交给 Agent 而不是 RAGService？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag design">考察点</span> 职责划分</div>
+      <div class="answer">
+        如果 RAGService 直接调 LLM 生成回答：<br>
+        — Agent 会失去对回答风格的控制（system prompt 定义的语气、引用规范）<br>
+        — 无法结合用户画像（getUserProfile）、优惠券（getShopVouchers）等 Tool 结果做综合推荐<br>
+        — 架构上 RAG 模块就会从"检索服务"膨胀成"检索 + 生成服务"，职责不清
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>这套设计有哪些边界风险？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag design">考察点</span> 系统设计思维</div>
+      <div class="answer">
+        1. <strong>内存上限：</strong>10 万条 × 1536 维 × 4 字节 ≈ 600MB，不适合大数据量<br>
+        2. <strong>启动阻塞：</strong>@PostConstruct 中的索引在启动时同步执行，未来数据量大时启动变慢<br>
+        3. <strong>无增量更新：</strong>新点评发布后不会自动进入向量库，需重启或手动触发<br>
+        4. <strong>无质量评估：</strong>没有 hit rate / MRR / faithfulness 等检索质量指标监控<br>
+        5. <strong>token 估算不精确：</strong>approxTokenLen 是估算值，batch size 偏乐观
+      </div>
+    </div>
+  </details>
+
+  <details class="qa-card">
+    <summary>如果让你继续优化，你会怎么做？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag design">考察点</span> 工程演进思路</div>
+      <div class="answer">
+        <strong>Phase 2 — Agent 记忆：</strong>对话历史 + 用户偏好提取 + 语义记忆持久化，让推荐个性化<br>
+        <strong>Phase 3 — 混合搜索：</strong>ES BM25 + 向量语义检索 → RRF 融合 + LLM 查询扩展（MQE）<br>
+        <strong>增量索引：</strong>新 Blog 发布 → MQ 事件 → 实时更新向量库<br>
+        <strong>质量评估：</strong>用 LLM 对检索结果做 faithfulness + relevance 评分，建立量化指标<br>
+        <strong>向量库升级：</strong>Redis Stack (FT.SEARCH) 或 Qdrant，支持 HNSW 近似检索
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ===== 7. INTERVIEW ===== -->
+<section id="interview">
+  <h2>面试高频追问</h2>
+
+  <div class="interview-card">
+    <h3>"你们项目的 RAG 是怎么做的？"</h3>
+    <div class="interview-points">
+      <div class="interview-point kp">
+        <h4>回答要点</h4>
+        从零手写全链路：TextChunker → OpenAIEmbeddingService → InMemoryVectorStore（余弦相似度） → RAGService 编排 → ReviewSearchTool 注入 Agent loop。每个组件留接口抽象，生产可替换。
+      </div>
+      <div class="interview-point bonus">
+        <h4>加分点</h4>
+        Markdown 结构感知分块 + CJK Unicode Block 判断 + CosineOnWriteArrayList 线程安全设计 + COWAL 写时复制的内存代价分析 + 为什么不用 HNSW（数据量小，KNN 够用）。
+      </div>
+      <div class="interview-point pitfall">
+        <h4>容易踩坑</h4>
+        不要说"用了 LangChain / Spring AI" 或 "调了个 API"。面试官期待听到你对每个组件的底层原理和数学公式的理解。
+      </div>
+    </div>
+  </div>
+
+  <div class="interview-card">
+    <h3>"分块器为什么不用固定长度？"</h3>
+    <div class="interview-points">
+      <div class="interview-point kp">
+        <h4>回答要点</h4>
+        固定长度分块会切断语义单元 — 可能在句子中间断开，破坏上下文连贯性。Markdown 标题是天然语义边界，段落合并保持上下文。
+      </div>
+      <div class="interview-point bonus">
+        <h4>加分点</h4>
+        CJK 字符 1 char = 1 token 的特殊处理。overlap 策略防止关键信息（如"这家店"的指代对象）跨越 chunk 边界丢失。超长段落在句号处断开而非硬切。
+      </div>
+      <div class="interview-point pitfall">
+        <h4>容易踩坑</h4>
+        不能说"固定窗口最常用所以选了它"。面试官期待听到你对语义边界的理解，以及不同分块策略（递归分块、语义分块、句子级分块）的对比。
+      </div>
+    </div>
+  </div>
+
+  <div class="interview-card">
+    <h3>"稀疏检索和稠密检索的区别？"</h3>
+    <div class="interview-points">
+      <div class="interview-point kp">
+        <h4>回答要点</h4>
+        BM25（稀疏）：基于词频-逆文档频率，对精确匹配、实体名、专有名词效果好。Embedding（稠密）：将文本映射到语义空间，擅长理解近义词和语义相似。
+      </div>
+      <div class="interview-point bonus">
+        <h4>加分点</h4>
+        最佳实践是混合：BM25 召回 + 向量召回 → RRF (Reciprocal Rank Fusion，k=60) 融合 → reranker 精排。能说出 RRF 公式 Σ 1/(k+rank_i) 并解释 k=60 的含义。
+      </div>
+      <div class="interview-point pitfall">
+        <h4>容易踩坑</h4>
+        不要绝对化"稠密已经完全取代稀疏"。在实体搜索（人名、店名）上 BM25 仍往往更准。
+      </div>
+    </div>
+  </div>
+
+  <div class="interview-card">
+    <h3>"余弦相似度和欧氏距离怎么选？"</h3>
+    <div class="interview-points">
+      <div class="interview-point kp">
+        <h4>回答要点</h4>
+        余弦测方向、欧氏测距离。文本 embedding 的 magnitude 通常不重要（OpenAI embedding 已归一化），所以用余弦 ≈ 用内积，效果等价且计算更快。
+      </div>
+      <div class="interview-point bonus">
+        <h4>加分点</h4>
+        能说出当向量已 L2 归一化时，余弦相似度和欧氏距离是单调等价的：||a-b||² = 2 - 2cos(a,b)。因此选余弦只因为直觉更自然，数学上没有优劣。
+      </div>
+      <div class="interview-point pitfall">
+        <h4>容易踩坑</h4>
+        不能说"随便选一个"。要说出关键词：方向 vs 大小、归一化、计算代价。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 8. ONE MINUTE ===== -->
+<section class="one-minute" id="one-min">
+  <h2>一分钟口述答案</h2>
+  <p>
+    我在 CityLife Review 这个 Spring Boot 项目中<strong>从零手写了一套 RAG 管线</strong>，让 Agent 能够对全站用户点评做语义搜索。
+    核心链路是：<strong>TextChunker</strong> 用 Markdown 标题层级做结构感知分块，CJK 字符按 1 token 估算；
+    <strong>OpenAIEmbeddingService</strong> 复用项目已有的 API 配置调 embedding 接口；
+    <strong>InMemoryVectorStore</strong> 基于 CosineOnWriteArrayList 做线程安全的余弦相似度检索；
+    <strong>RAGService</strong> 编排 Retrieve + Augment，Generation 交给 Agent 的 LLM 以保留回答风格。
+    最后通过 <strong>ReviewSearchTool</strong> 实现项目已有的 Tool 接口，自动注入 Agent 的 tool-calling loop。
+    检索结果带 <code>[1]</code> <code>[2]</code> 引用编号。失败静默降级不影响主流程。17 个单元测试全部通过。
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var links = document.querySelectorAll('.toc-sidebar nav a');
+  window.addEventListener('scroll', function() {
+    var scrollY = window.scrollY + 100;
+    var current = '';
+    sections.forEach(function(s) {
+      if (s.getBoundingClientRect().top + window.scrollY <= scrollY) current = s.id;
+    });
+    links.forEach(function(a) {
+      a.classList.remove('active');
+      if (a.getAttribute('href') === '#' + current) a.classList.add('active');
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -4,10 +4,11 @@ spring:
   application:
     name: citylife-review
   datasource:
-    driver-class-name: com.mysql.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/citylife_review?useSSL=false&serverTimezone=UTC}
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:}
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://127.0.0.1:9200}
   redis:
     host: ${REDIS_HOST:127.0.0.1}
     port: ${REDIS_PORT:6379}
@@ -38,3 +39,25 @@ logging:
 citylife:
   upload:
     image-dir: ${CITYLIFE_IMAGE_UPLOAD_DIR:D:/lesson/nginx-1.18.0/html/citylife/imgs/}
+  ai:
+    openai:
+      api-key: ${AGENT_API_KEY:}
+      base-url: ${AGENT_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AGENT_MODEL:gpt-4o}
+      embedding:
+        options:
+          model: ${AGENT_EMBEDDING_MODEL:text-embedding-3-small}
+      vectorstore:
+        redis:
+          initialize-schema: true
+          index: citylife-review-index
+          prefix: rag:
+  rag:
+    mqe-enabled: true
+    hyde-enabled: true
+    rerank-enabled: true
+    cache-enabled: true
+    timeout-seconds: 15
+    cache-ttl-minutes: 30

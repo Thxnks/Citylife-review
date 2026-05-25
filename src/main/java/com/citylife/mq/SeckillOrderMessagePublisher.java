@@ -8,8 +8,8 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,15 +40,15 @@ public class SeckillOrderMessagePublisher {
             rollbackSeckillQualification(correlationId);
         });
 
-        rabbitTemplate.setReturnCallback((message, replyCode, replyText, exchange, routingKey) -> {
-            String correlationId = message.getMessageProperties().getCorrelationId();
+        rabbitTemplate.setReturnsCallback(returned -> {
+            String correlationId = returned.getMessage().getMessageProperties().getCorrelationId();
             if (correlationId == null) {
                 log.error("seckill order message returned without correlation id, exchange: {}, routingKey: {}",
-                        exchange, routingKey);
+                        returned.getExchange(), returned.getRoutingKey());
                 return;
             }
             log.error("seckill order message returned, correlationId: {}, replyCode: {}, replyText: {}",
-                    correlationId, replyCode, replyText);
+                    correlationId, returned.getReplyCode(), returned.getReplyText());
             rollbackSeckillQualification(correlationId);
         });
     }

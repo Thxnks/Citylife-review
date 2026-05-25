@@ -6,9 +6,12 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.citylife.dto.Result;
 import com.citylife.entity.Shop;
 import com.citylife.mapper.ShopMapper;
+import com.citylife.service.IShopSearchService;
 import com.citylife.service.IShopService;
 import com.citylife.utils.CacheClient;
 import com.citylife.utils.SystemConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
@@ -18,7 +21,7 @@ import org.springframework.data.redis.domain.geo.GeoReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,11 +36,16 @@ import static com.citylife.utils.RedisConstants.SHOP_GEO_KEY;
 @Service
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ShopServiceImpl.class);
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
     @Resource
     private CacheClient cacheClient;
+
+    @Resource
+    private IShopSearchService shopSearchService;
 
     @Override
     public Result<?> queryById(Long id) {
@@ -64,6 +72,11 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
         updateById(shop);
         stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
+        try {
+            shopSearchService.save(shop);
+        } catch (RuntimeException e) {
+            LOGGER.warn("failed to sync shop to elasticsearch, shopId: {}", id, e);
+        }
         return Result.ok();
     }
 

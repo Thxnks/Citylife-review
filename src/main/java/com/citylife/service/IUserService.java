@@ -5,7 +5,7 @@ import com.citylife.dto.LoginFormDTO;
 import com.citylife.dto.Result;
 import com.citylife.entity.User;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * <p>

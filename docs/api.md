@@ -120,6 +120,32 @@ GET /shop/of/type?typeId=1&current=1&x=120.149192&y=30.316078
 GET /shop/of/name?name=coffee&current=1
 ```
 
+### Search Shops with ElasticSearch
+
+Rebuild the shop index from MySQL first:
+
+```http
+POST /shop/search/index/rebuild
+```
+
+Keyword search:
+
+```http
+GET /shop/search?keyword=coffee&current=1&size=10
+```
+
+Filter and sort:
+
+```http
+GET /shop/search?keyword=coffee&typeId=1&sortBy=score
+```
+
+Distance sort:
+
+```http
+GET /shop/search?keyword=coffee&x=120.149192&y=30.316078
+```
+
 ## Shop Type APIs
 
 ### Shop Type List

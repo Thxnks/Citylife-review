@@ -8,6 +8,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -31,39 +34,27 @@ public class Voucher implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    /**
-     */
+    @NotNull(message = "Shop ID is required")
     private Long shopId;
 
-    /**
-     * 浠ｉ噾鍒告爣棰?
-     */
+    @NotBlank(message = "Voucher title is required")
     private String title;
 
-    /**
-     */
     private String subTitle;
 
-    /**
-     */
     private String rules;
 
-    /**
-     * 鏀粯閲戦
-     */
+    @NotNull(message = "Pay value is required")
+    @Min(value = 1, message = "Pay value must be at least 1 cent")
     private Long payValue;
 
-    /**
-     * 鎶垫墸閲戦
-     */
+    @NotNull(message = "Actual value is required")
+    @Min(value = 1, message = "Actual value must be at least 1 cent")
     private Long actualValue;
 
-    /**
-     */
+    @NotNull(message = "Voucher type is required")
     private Integer type;
 
-    /**
-     */
     private Integer status;
     /**
      */

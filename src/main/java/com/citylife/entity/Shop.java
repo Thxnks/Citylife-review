@@ -8,6 +8,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -31,25 +34,16 @@ public class Shop implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    /**
-     */
+    @NotBlank(message = "Shop name is required")
     private String name;
 
-    /**
-     */
+    @NotNull(message = "Type ID is required")
     private Long typeId;
 
-    /**
-     */
     private String images;
 
-    /**
-     */
     private String area;
 
-    /**
-     * 鍦板潃
-     */
     private String address;
 
     /**

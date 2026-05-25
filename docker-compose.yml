@@ -9,6 +9,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/citylife_review?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
       MYSQL_USERNAME: root
@@ -20,6 +22,7 @@ services:
       RABBITMQ_USERNAME: citylife
       RABBITMQ_PASSWORD: citylife_pass
       RABBITMQ_VIRTUAL_HOST: /
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
       CITYLIFE_IMAGE_UPLOAD_DIR: /app/uploads/
     ports:
       - "8081:8081"
@@ -28,7 +31,7 @@ services:
     restart: unless-stopped
 
   mysql:
-    image: mysql:5.7
+    image: mysql:8.0
     container_name: citylife-review-mysql
     command:
       - --character-set-server=utf8mb4
@@ -50,7 +53,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:6.2-alpine
+    image: redis/redis-stack:7.2.0-v15
     container_name: citylife-review-redis
     ports:
       - "6379:6379"
@@ -81,8 +84,26 @@ services:
       retries: 10
     restart: unless-stopped
 
+  elasticsearch:
+    image: elasticsearch:7.17.28
+    container_name: citylife-review-elasticsearch
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   redis_data:
   rabbitmq_data:
+  elasticsearch_data:
   citylife_uploads:

@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityLife Review — RAG 智能检索增强 代码解读</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 36px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 18px; line-height: 1.72; color: #111827; background: linear-gradient(180deg, #f8fafc 0%, #f3f6fb 42%, #f7f8fb 100%);
+}
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .en-token { font-family: Consolas, "Cascadia Code", "SF Mono", monospace; }
+
+/* ===== Layout ===== */
+.page-wrap { display: flex; width: 100%; max-width: 1560px; margin: 0; min-height: 100vh; }
+
+/* ===== Left TOC ===== */
+.toc-sidebar {
+  position: sticky; top: 0; height: 100vh; width: 278px; min-width: 278px;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-right: 1px solid #d8e0ec; padding: 34px 22px;
+  overflow-y: auto; font-size: 16px; z-index: 10; box-shadow: 8px 0 24px rgba(15, 23, 42, 0.035);
+}
+.toc-sidebar h2 { font-size: 18px; color: #111827; margin-bottom: 16px; font-weight: 700; }
+.toc-sidebar nav a {
+  display: block; padding: 8px 11px; border-radius: 7px; color: #4b5563;
+  margin-bottom: 3px; border-left: 3px solid transparent; transition: background .18s, color .18s, border-color .18s, transform .18s;
+}
+.toc-sidebar nav a:hover { background: #f1f5fb; color: #1d4ed8; text-decoration: none; }
+.toc-sidebar nav a.active { background: #eaf2ff; color: #1d4ed8; text-decoration: none; border-left-color: #2563eb; font-weight: 700; transform: translateX(2px); }
+.toc-sidebar nav a.sub { padding-left: 24px; font-size: 15px; }
+.toc-badge {
+  display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
+  font-weight: 600; vertical-align: middle; margin-left: 4px;
+}
+.toc-badge.new { background: #dcfce7; color: #15803d; }
+.toc-badge.core { background: #dbeafe; color: #1d4ed8; }
+
+/* ===== Main Content ===== */
+.main-content { flex: 1; max-width: 1240px; padding: 44px 58px 42vh; min-width: 0; }
+.main-content section { margin-bottom: 72px; scroll-margin-top: 36px; }
+.main-content h1 { font-size: 34px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+.main-content h2 {
+  font-size: 29px; font-weight: 700; color: #111827; margin-bottom: 18px;
+  padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;
+}
+.main-content h3 { font-size: 22px; font-weight: 600; color: #1f2937; margin: 22px 0 10px; }
+.main-content p, .main-content li { color: #374151; margin-bottom: 8px; }
+.main-content ul, .main-content ol { padding-left: 22px; margin-bottom: 12px; }
+
+:root {
+  --surface-radius: 14px;
+  --surface-border: #dfe6f1;
+  --surface-shadow: 0 14px 34px rgba(15, 23, 42, 0.055);
+  --surface-shadow-soft: 0 8px 22px rgba(15, 23, 42, 0.04);
+}
+
+/* ===== Hero Summary ===== */
+.hero-summary {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 58%, #f4f8ff 100%);
+  border-radius: var(--surface-radius); padding: 36px 40px;
+  border: 1px solid var(--surface-border); box-shadow: var(--surface-shadow);
+}
+.hero-summary h1 { border: none; padding: 0; margin-bottom: 4px; }
+.hero-subtitle { color: #6b7280; font-size: 17px; margin-bottom: 20px; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px;
+  border-radius: 20px; font-size: 14px; font-weight: 600;
+}
+.hero-tag.rec { background: #dcfce7; color: #15803d; }
+.hero-tag.risk { background: #fef3c7; color: #92400e; }
+.hero-tag.files { background: #dbeafe; color: #1d4ed8; }
+.hero-stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+.hero-stat {
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;
+  padding: 14px 20px; min-width: 100px;
+}
+.hero-stat .num { font-size: 28px; font-weight: 800; color: #111827; }
+.hero-stat .label { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+/* ===== Feature Grid ===== */
+.feature-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;
+}
+.feature-card {
+  background: #fff; border-radius: var(--surface-radius); padding: 24px 26px;
+  border: 1px solid var(--surface-border); box-shadow: var(--surface-shadow-soft);
+}
+.feature-card h3 { margin-top: 0; font-size: 18px; }
+.feature-card .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; }
+.feature-tag {
+  font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.feature-tag.new { background: #dcfce7; color: #15803d; }
+.feature-tag.enhanced { background: #fff7ed; color: #c2410c; }
+
+/* ===== Explain Strip ===== */
+.explain-strip {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 26px; row-gap: 34px; align-items: stretch;
+}
+.explain-col {
+  background: #fff; border-radius: var(--surface-radius);
+  padding: 22px 24px; border: 1px solid var(--surface-border); box-shadow: var(--surface-shadow-soft);
+}
+.explain-col h3 { margin-top: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; color: #111827; }
+.explain-col .badge {
+  font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.badge-before { background: #fee2e2; color: #b91c1c; }
+.badge-after { background: #dcfce7; color: #15803d; }
+.badge-why { background: #dbeafe; color: #1d4ed8; }
+
+/* ===== Code Panel ===== */
+.code-panel {
+  background: #fff; border-radius: var(--surface-radius); border: 1px solid var(--surface-border);
+  margin-bottom: 28px; box-shadow: var(--surface-shadow-soft);
+}
+.code-panel-header {
+  padding: 14px 20px; border-bottom: 1px solid #e5e7eb;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.code-panel-header h3 { margin: 0; font-size: 17px; }
+.code-panel-header .file-path { font-size: 14px; color: #64748b; }
+.code-panel-body { padding: 18px 20px; }
+.code-panel-body p.desc { color: #4b5563; margin-bottom: 14px; font-size: 16px; }
+.code-block {
+  background: #1e1e2e; color: #cdd6f4; border-radius: 6px; padding: 16px 20px;
+  overflow-x: auto; font-size: 15px; line-height: 1.6; margin-bottom: 14px;
+}
+.code-block .tok-kw { color: #cba6f7; }
+.code-block .tok-str { color: #a6e3a1; }
+.code-block .tok-cm { color: #6c7086; font-style: italic; }
+.code-block .tok-type { color: #f9e2af; }
+.code-block .tok-method { color: #89b4fa; }
+.code-block .tok-num { color: #fab387; }
+.code-block .tok-ann { color: #f38ba8; }
+.code-block .tok-var { color: #cdd6f4; }
+.hl-line { display: block; background: rgba(137, 180, 250, 0.12); margin: 0 -20px; padding: 0 20px; border-left: 3px solid #89b4fa; }
+
+/* ===== Timeline Flow ===== */
+.flow-stage { margin-bottom: 28px; }
+.flow-stage-title {
+  font-size: 19px; font-weight: 700; color: #1d4ed8; margin-bottom: 12px;
+  padding: 6px 14px; background: #eff6ff; border-radius: 6px; display: inline-block;
+}
+.timeline { position: relative; padding-left: 40px; }
+.timeline::before {
+  content: ''; position: absolute; left: 17px; top: 8px; bottom: 8px;
+  width: 2px; background: #d9dee7;
+}
+.tl-node { position: relative; margin-bottom: 16px; }
+.tl-node::before {
+  content: attr(data-step); position: absolute; left: -38px; top: 6px;
+  width: 28px; height: 28px; border-radius: 50%; background: #2563eb;
+  color: #fff; font-size: 13px; font-weight: 700; display: flex;
+  align-items: center; justify-content: center; line-height: 1;
+}
+.tl-node.new-step::before { background: #15803d; }
+.tl-card {
+  background: #fff; border: 1px solid var(--surface-border); border-radius: 8px;
+  padding: 18px 22px; box-shadow: var(--surface-shadow-soft);
+}
+.tl-card .cn-title { font-size: 18px; font-weight: 600; color: #111827; }
+.tl-card .en-method { font-family: Consolas, "Cascadia Code", monospace; font-size: 15.5px; color: #1d4ed8; margin: 5px 0 7px; }
+.tl-card .cn-explain { font-size: 16px; color: #4b5563; }
+.tl-label { font-size: 11px; padding: 1px 7px; border-radius: 3px; font-weight: 600; margin-left: 6px; }
+.tl-label.new { background: #dcfce7; color: #15803d; }
+.tl-branch {
+  margin: 10px 0 0 0; padding: 10px 13px; font-size: 15.5px; color: #475569;
+  background: #f8fafc; border: 1px solid #e5e7eb; border-left: 3px solid #93c5fd;
+  border-radius: 7px; display: flex; align-items: flex-start; gap: 10px;
+}
+.tl-branch::before {
+  content: '降级';
+  flex: 0 0 auto; font-size: 12px; font-weight: 700; color: #1d4ed8;
+  background: #dbeafe; border-radius: 4px; padding: 2px 7px; margin-top: 1px;
+}
+.tl-branch .branch-text { flex: 1; min-width: 0; }
+.tl-branch .branch-condition { color: #1f2937; font-weight: 700; }
+.tl-branch .branch-arrow { color: #94a3b8; padding: 0 7px; }
+.tl-branch .branch-result { color: #475569; }
+
+/* ===== QA Card ===== */
+.qa-card {
+  background: #fff; border-radius: var(--surface-radius); border: 1px solid var(--surface-border);
+  margin-bottom: 14px; box-shadow: var(--surface-shadow-soft);
+}
+.qa-card summary {
+  padding: 18px 22px; cursor: pointer; font-size: 18px; font-weight: 700; color: #111827;
+  list-style: none; display: grid; grid-template-columns: 1fr auto;
+  column-gap: 18px; align-items: center; line-height: 1.45;
+}
+.qa-card summary::-webkit-details-marker { display: none; }
+.qa-card summary::after { content: '▸'; font-size: 14px; color: #94a3b8; transition: transform .2s; justify-self: end; }
+.qa-card[open] summary::after { transform: rotate(90deg); }
+.qa-card-body { padding: 0 20px 18px; font-size: 16px; }
+.qa-card-body .hint { color: #6b7280; font-size: 14px; margin-bottom: 8px; }
+.qa-card-body .answer { background: #f9fafb; border-radius: 6px; padding: 12px 16px; color: #374151; }
+.qa-tag {
+  display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 3px;
+  font-weight: 600; margin-right: 6px;
+}
+.qa-tag.basic { background: #dbeafe; color: #1d4ed8; }
+.qa-tag.impl { background: #dcfce7; color: #15803d; }
+.qa-tag.design { background: #fef3c7; color: #92400e; }
+
+/* ===== Interview Card ===== */
+.interview-card {
+  background: #fff; border-radius: var(--surface-radius); border: 1px solid var(--surface-border);
+  padding: 20px 24px; margin-bottom: 16px; box-shadow: var(--surface-shadow-soft);
+}
+.interview-card h3 { margin-top: 0; font-size: 18px; color: #111827; }
+.interview-points { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.interview-point {
+  flex: 1; min-width: 200px; padding: 12px 16px; border-radius: 6px; font-size: 15px;
+}
+.interview-point.kp { background: #eff6ff; }
+.interview-point.bonus { background: #f0fdf4; }
+.interview-point.pitfall { background: #fef2f2; }
+.interview-point h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.interview-point.kp h4 { color: #1d4ed8; }
+.interview-point.bonus h4 { color: #15803d; }
+.interview-point.pitfall h4 { color: #b91c1c; }
+
+/* ===== One Minute ===== */
+.one-minute {
+  background: linear-gradient(135deg, #eaf2ff 0%, #eefdf5 100%);
+  border-radius: var(--surface-radius); border: 1px solid #bfdbfe;
+  padding: 34px 38px; box-shadow: var(--surface-shadow);
+}
+.one-minute h2 { border: none; padding: 0; margin-bottom: 14px; }
+.one-minute p { font-size: 19px; color: #1e3a5f; line-height: 1.85; }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .page-wrap { flex-direction: column; }
+  .toc-sidebar { position: static; height: auto; width: 100%; min-width: auto; padding: 16px; }
+  .toc-sidebar nav { display: flex; overflow-x: auto; gap: 4px; }
+  .toc-sidebar nav a { white-space: nowrap; flex-shrink: 0; }
+  .main-content { padding: 20px 16px 30vh; }
+  .explain-strip { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+<!-- ===== 左侧导航 ===== -->
+<aside class="toc-sidebar">
+  <h2>📋 内容导航</h2>
+  <nav>
+    <a href="#hero">改动总览</a>
+    <a href="#features" class="sub">新增能力</a>
+    <a href="#why" class="sub">为什么这样改</a>
+    <a href="#code" class="sub">代码精读</a>
+    <a href="#flow" class="sub">检索流程图</a>
+    <a href="#qa">自测问答</a>
+    <a href="#interview">面试追问</a>
+    <a href="#onemin">一分钟口述</a>
+  </nav>
+</aside>
+
+<!-- ===== 主内容区 ===== -->
+<main class="main-content">
+
+<!-- ========== Hero ========== -->
+<section id="hero">
+<div class="hero-summary">
+  <h1>CityLife Review — RAG 智能检索增强</h1>
+  <div class="hero-subtitle">把 AI 搜索从"关键词匹配"升级成"语义理解"，让用户说人话也能搜到想要的东西</div>
+
+  <div class="hero-meta">
+    <span class="hero-tag rec">✅ 推荐合并</span>
+    <span class="hero-tag risk">🟡 低风险（业务代码未改动）</span>
+    <span class="hero-tag files">📄 新增 2 文件 · 重写 2 文件 · 修改 3 文件</span>
+  </div>
+
+  <div class="hero-stat-row">
+    <div class="hero-stat">
+      <div class="num">5</div>
+      <div class="label">个变更文件</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">~350</div>
+      <div class="label">行新增代码</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">11/11</div>
+      <div class="label">测试全部通过</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">0</div>
+      <div class="label">业务代码改动</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">3</div>
+      <div class="label">层降级保护</div>
+    </div>
+  </div>
+
+  <p style="margin-top:18px;font-size:16px;color:#4b5563;">
+    核心改动：MQE 多角度改写 → HyDE 假想点评桥接 → 多路检索合并 → LLM 语义精选。每一步挂了都有备用方案，不影响基础搜索。
+  </p>
+</div>
+</section>
+
+<!-- ========== 新增能力 ========== -->
+<section id="features">
+<h2>新增了什么能力</h2>
+
+<div class="feature-grid">
+
+  <div class="feature-card">
+    <h3>🔍 智能查询改写</h3>
+    <div class="tag-row"><span class="feature-tag new">新增</span></div>
+    <p><strong>解决的问题：</strong>用户问"那边贵不贵"，点评里写的是"人均80-120"，关键词完全对不上，直接搜啥都搜不到。</p>
+    <p><strong>改动前：</strong>用户说啥就搜啥，口语查询直接扔进向量库。</p>
+    <p><strong>改动后：</strong>AI 先把口语转成 2-3 个标准搜索词（"人均消费价格 性价比"+"消费水平 价位档次"），再去搜。</p>
+    <p><strong>入口：</strong><code class="en-token">QueryExpander.expandQuery()</code></p>
+  </div>
+
+  <div class="feature-card">
+    <h3>📝 假想点评生成</h3>
+    <div class="tag-row"><span class="feature-tag new">新增</span></div>
+    <p><strong>解决的问题：</strong>查询和点评文本之间的语言风格差异太大——问题很短很口语，点评很长很书面。</p>
+    <p><strong>改动前：</strong>没有这个环节。</p>
+    <p><strong>改动后：</strong>AI 先生成一段假想点评（80-150字），再把这段假点评转成向量去搜真点评。"用答案找答案"。</p>
+    <p><strong>入口：</strong><code class="en-token">QueryExpander.generateHyde()</code></p>
+  </div>
+
+  <div class="feature-card">
+    <h3>🎯 语义结果精选</h3>
+    <div class="tag-row"><span class="feature-tag new">新增</span></div>
+    <p><strong>解决的问题：</strong>向量搜索按数学距离排序，"距离近"不等于"对回答问题有用"。同一个词在差评和好评里用法完全不同。</p>
+    <p><strong>改动前：</strong>向量搜回来按距离排个序就完事。</p>
+    <p><strong>改动后：</strong>搜回一堆候选（约15-30条），让 AI 做语义判断——哪条真的在回答用户的问题，挑最好的。同时标注这是好评还是差评。</p>
+    <p><strong>入口：</strong><code class="en-token">ResultReRanker.rerank()</code></p>
+  </div>
+
+  <div class="feature-card">
+    <h3>💾 向量持久化</h3>
+    <div class="tag-row"><span class="feature-tag enhanced">改进</span></div>
+    <p><strong>解决的问题：</strong>之前向量存内存里，每次重启服务索引全丢，重新索引几百条点评又慢又费钱（调用嵌入API）。</p>
+    <p><strong>改动前：</strong><code class="en-token">SimpleVectorStore</code>，纯内存。</p>
+    <p><strong>改动后：</strong><code class="en-token">RedisVectorStore</code>，存 Redis，重启还在。用独立的 Jedis 连接，不影响原有的缓存和分布式锁。</p>
+    <p><strong>入口：</strong><code class="en-token">RagConfig.vectorStore()</code></p>
+  </div>
+
+  <div class="feature-card">
+    <h3>🏷️ 观点倾向标注</h3>
+    <div class="tag-row"><span class="feature-tag new">新增</span></div>
+    <p><strong>解决的问题：</strong>Agent 推荐的时候不知道每条点评是在夸还是骂，只能按内容推荐，容易推荐到被差评的店。</p>
+    <p><strong>改动前：</strong>只返回文本和分数。</p>
+    <p><strong>改动后：</strong>LLM 重排序时顺带标注情感倾向（好评/差评/中性），Agent 看到差评会自动回避。</p>
+    <p><strong>入口：</strong><code class="en-token">ResultReRanker.RankedResult.sentiment()</code></p>
+  </div>
+
+</div>
+</section>
+
+<!-- ========== 为什么这样改 ========== -->
+<section id="why">
+<h2>改动前 → 改动后 → 为什么</h2>
+
+<div class="explain-strip">
+
+  <div class="explain-col">
+    <h3><span class="badge badge-before">改动前</span> 最朴素的 RAG</h3>
+    <p style="margin-top:12px;">
+      用户说"朝阳区有没有适合约会的餐厅，别太贵"<br><br>
+      → 直接向量搜索"朝阳区有没有适合约会的餐厅，别太贵"<br><br>
+      → 问题：这句口语和点评文本的语言风格完全不同，向量搜到的往往不相关<br><br>
+      → 结果：召回质量靠运气
+    </p>
+  </div>
+
+  <div class="explain-col">
+    <h3><span class="badge badge-after">改动后</span> 增强 RAG 管线</h3>
+    <p style="margin-top:12px;">
+      → MQE 把问题改成"朝阳区 情侣约会 环境氛围" + "朝阳区 性价比 约会餐厅"<br><br>
+      → HyDE 生成假点评"上周去了朝阳区一家餐厅，灯光柔和很私密..."<br><br>
+      → 4 个查询各搜 N 条，合并去重<br><br>
+      → LLM 从候选里挑最相关的，标注好评/差评<br><br>
+      → 结果：每一步都在缩小语义差距
+    </p>
+  </div>
+
+  <div class="explain-col">
+    <h3><span class="badge badge-why">为什么</span> 走语义路线而不是规则路线</h3>
+    <p style="margin-top:12px;">
+      我的另一个项目 ai-code-helper 走的是规则路线：60% 向量相似度 + 40% 关键词匹配。因为刷题场景里"动态规划""二叉树"这些词是精确的，关键词匹配很管用。<br><br>
+      但点评场景不同：<strong>"氛围好"和"环境舒服"说的是同一件事，但关键词完全不重叠</strong>。所以这边走语义路线——让 AI 理解用户到底想问什么，而不是靠关键词碰运气。<br><br>
+      两条路线都做了，面试的时候可以对比论证。
+    </p>
+  </div>
+
+</div>
+
+<div style="margin-top:22px;background:#fff;border-radius:14px;border:1px solid #dfe6f1;padding:18px 22px;box-shadow:0 8px 22px rgba(15, 23, 42, 0.04);">
+  <strong style="color:#15803d;">🛡️ 防御性设计：</strong>管线里每一步都可能失败——MQE 挂了就少搜两路，HyDE 挂了就少搜一路，LLM 重排序挂了就退回按向量距离排序。每一步都有降级策略，最差情况下退化成原来的朴素搜索，不会比改之前更差。
+</div>
+</section>
+
+<!-- ========== 代码精读 ========== -->
+<section id="code">
+<h2>代码精读</h2>
+
+<!-- QueryExpander -->
+<div class="code-panel">
+  <div class="code-panel-header">
+    <h3>🔍 QueryExpander — 查询改写器</h3>
+    <span class="file-path">rag/QueryExpander.java · 新增</span>
+  </div>
+  <div class="code-panel-body">
+    <p class="desc"><strong>文件职责：</strong>接收用户的原始口语查询，输出 2-3 个改写变体 + 1 段假想点评。核心目的是填补"用户怎么说"和"点评怎么写"之间的语言风格差距。</p>
+
+    <p style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">MQE 改写 — 关键代码：</p>
+    <div class="code-block">
+<pre><span class="tok-cm">// 领域 Few-shot：告诉 AI 本地生活点评里常怎么说</span>
+<span class="tok-kw">private static final</span> <span class="tok-type">String</span> MQE_PROMPT = <span class="tok-str">"""
+    改写规则：
+    "贵不贵" → "人均消费价格 性价比"
+    "好不好吃" → "口味 菜品质量 推荐菜"
+    "适合约会吗" → "环境氛围 私密 浪漫 适合两个人"
+    ..."""</span>;
+
+<span class="tok-kw">public</span> List&lt;String&gt; <span class="tok-method">expandQuery</span>(String query, <span class="tok-kw">int</span> numExpansions) {
+    <span class="tok-kw">if</span> (query == <span class="tok-kw">null</span> || query.isBlank()) <span class="tok-kw">return</span> List.of();
+    <span class="tok-cm">// 调 LLM 做改写</span>
+    String response = chatClient.prompt().user(prompt).call().content();
+    <span class="hl-line">    <span class="tok-cm">// 失败降级：返回空列表，不影响主流程</span></span>
+<span class="hl-line">    <span class="tok-kw">catch</span> (Exception e) { <span class="tok-kw">return</span> List.of(); }</span>
+}</pre>
+    </div>
+    <p style="color:#4b5563;"><strong>Review 重点：</strong>prompt 里给的几个映射例子是领域的 Few-shot——不给的话 AI 也能改写，但改写出来的词可能跟真实点评里的用词对不上。这段 prompt 是 recall 提升的主要来源。</p>
+
+    <p style="font-weight:700;color:#1d4ed8;margin:16px 0 6px;">HyDE 假想点评 — 关键代码：</p>
+    <div class="code-block">
+<pre><span class="tok-kw">public</span> String <span class="tok-method">generateHyde</span>(String query) {
+    <span class="tok-cm">// 让 AI 扮演"用户"，写一段假点评</span>
+    <span class="tok-cm">// 强调"不需要虚构店铺名称"——避免向量偏到具体实体</span>
+    String response = chatClient.prompt().user(prompt).call().content();
+<span class="hl-line">    <span class="tok-cm">// 失败降级：返回 null，RAGService 跳过多加一个查询</span></span>
+<span class="hl-line">    <span class="tok-kw">catch</span> (Exception e) { <span class="tok-kw">return null</span>; }</span>
+}</pre>
+    </div>
+    <p style="color:#4b5563;"><strong>为什么"不虚构店名"很重要？</strong>虚构了店名会让假点评的向量空间偏向那个名字，而不是偏向"这类体验"的语义。我们想要的是"约会体验"这个语义方向。</p>
+  </div>
+</div>
+
+<!-- ResultReRanker -->
+<div class="code-panel">
+  <div class="code-panel-header">
+    <h3>🎯 ResultReRanker — 结果精选器</h3>
+    <span class="file-path">rag/ResultReRanker.java · 新增</span>
+  </div>
+  <div class="code-panel-body">
+    <p class="desc"><strong>文件职责：</strong>接收一堆候选（15-30条），让 LLM 判每条跟原问题的相关度，挑出最好的 N 条，同时标注情感倾向（好评/差评/中性）。</p>
+
+    <p style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">关键代码：</p>
+    <div class="code-block">
+<pre><span class="tok-kw">public</span> List&lt;RankedResult&gt; <span class="tok-method">rerank</span>(String query,
+        List&lt;RetrievalResult&gt; candidates, <span class="tok-kw">int</span> topK) {
+
+    <span class="tok-cm">// 每条候选最多给 LLM 看 300 字，省 token</span>
+    <span class="tok-kw">if</span> (text != <span class="tok-kw">null</span> && text.length() > <span class="tok-num">300</span>) {
+        text = text.substring(<span class="tok-num">0</span>, <span class="tok-num">300</span>) + <span class="tok-str">"..."</span>;
+    }
+
+    <span class="tok-cm">// LLM 返回 JSON，扒掉可能的 markdown 代码块</span>
+    String json = <span class="tok-method">extractJson</span>(response);
+    JSONArray arr = JSONUtil.parseArray(json);
+
+    <span class="hl-line">    <span class="tok-cm">// 失败降级：按向量距离排序，情感写"中性"</span></span>
+<span class="hl-line">    <span class="tok-kw">return</span> <span class="tok-method">fallbackRank</span>(candidates, topK);</span>
+}
+
+<span class="tok-cm">// 降级方法</span>
+<span class="tok-kw">private</span> List&lt;RankedResult&gt; <span class="tok-method">fallbackRank</span>(...) {
+    <span class="tok-kw">return</span> candidates.stream()
+        .sorted((a, b) -> Double.compare(b.score, a.score))
+        .limit(topK)
+        .map(r -> <span class="tok-kw">new</span> RankedResult(r, r.score, <span class="tok-str">"neutral"</span>, <span class="tok-str">"向量分数"</span>))
+        .toList();</pre>
+    </div>
+    <p style="color:#4b5563;"><strong>Review 重点：</strong>降级时 sentiment 写死 "neutral"，reason 写死 "向量分数"——将来 debug 时看到这两个值立刻能判断"这轮重排序失败了"。</p>
+    <p style="color:#4b5563;"><strong>风险点：</strong>重排序每次调 LLM，候选太多会消耗大量 token。截断到 300 字和限制候选池大小（通过 CANDIDATE_POOL_MULTIPLIER）是成本控制的关键。</p>
+  </div>
+</div>
+
+<!-- RAGService -->
+<div class="code-panel">
+  <div class="code-panel-header">
+    <h3>⚙️ RAGService — 核心搜索管线</h3>
+    <span class="file-path">rag/RAGService.java · 重写</span>
+  </div>
+  <div class="code-panel-body">
+    <p class="desc"><strong>文件职责：</strong>串联整个检索管线——MQE → HyDE → 多路检索 → 去重 → LLM 重排序 → 组装结果。是整个改动的"指挥中心"。</p>
+
+    <p style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">主方法改动前 vs 改动后：</p>
+    <div class="code-block">
+<pre><span class="tok-cm">// 改动前：3 行</span>
+<span class="tok-type">List</span>&lt;Document&gt; docs = vectorStore.similaritySearch(query, topK);
+filter by sourceType;
+<span class="tok-kw">return</span> results;
+
+<span class="tok-cm">// 改动后：60 行，6 步</span>
+<span class="tok-type">List</span>&lt;String&gt; expansions = queryExpander.expandQuery(query); <span class="tok-cm">// MQE</span>
+String hydeText = queryExpander.generateHyde(query);            <span class="tok-cm">// HyDE</span>
+<span class="tok-cm">// 4 个查询各搜 topK*3 条 → 合并去重</span>
+<span class="hl-line">Map&lt;String, RetrievalResult&gt; dedup = <span class="tok-kw">new</span> LinkedHashMap&lt;&gt;();</span>
+<span class="hl-line"><span class="tok-kw">for</span> (String q : allQueries) { ... dedup.put(docId, best); }</span>
+<span class="tok-cm">// LLM 重排序 + 组装</span>
+resultReRanker.rerank(query, candidates, topK);</pre>
+    </div>
+
+    <p style="font-weight:700;color:#1d4ed8;margin:16px 0 6px;">候选池动态分配：</p>
+    <div class="code-block">
+<pre><span class="tok-kw">int</span> perQueryLimit = Math.max(
+    topK * CANDIDATE_POOL_MULTIPLIER / Math.max(<span class="tok-num">1</span>, allQueries.size()),
+    topK);</pre>
+    </div>
+    <p style="color:#4b5563;">topK=3，4 个查询的时候每个搜 3 条，共 12 条候选。最差情况（扩展全失败，只剩 1 个查询）每个搜 9 条，给 LLM 足够的选择空间。</p>
+    <p style="color:#4b5563;"><strong>保留了 searchBasic()：</strong>原始的最简实现没删，留着做 AB 对比评估。</p>
+  </div>
+</div>
+
+<!-- RagConfig -->
+<div class="code-panel">
+  <div class="code-panel-header">
+    <h3>💾 RagConfig — 向量存储配置</h3>
+    <span class="file-path">rag/RagConfig.java · 重写</span>
+  </div>
+  <div class="code-panel-body">
+    <p class="desc"><strong>文件职责：</strong>从 SimpleVectorStore 换成 RedisVectorStore。Jedis 连接池专供向量存储，跟 Spring Data Redis 的 Lettuce 互不干扰。</p>
+    <div class="code-block">
+<pre><span class="tok-cm">// Jedis 连接池——专给向量存储用的独立通道</span>
+<span class="tok-ann">@Bean</span>(destroyMethod = <span class="tok-str">"close"</span>)
+<span class="tok-type">JedisPooled</span> <span class="tok-method">jedisPooled</span>() { ... }
+
+<span class="hl-line"><span class="tok-cm">// initializeSchema(true) — M6 默认 false，不开首次 add 会报错</span></span>
+<span class="hl-line"><span class="tok-ann">@Bean</span> <span class="tok-type">VectorStore</span> <span class="tok-method">vectorStore</span>(JedisPooled jedisPooled) {</span>
+<span class="hl-line">    <span class="tok-kw">return</span> RedisVectorStore.builder(jedisPooled, embeddingModel)</span>
+<span class="hl-line">        .initializeSchema(<span class="tok-kw">true</span>).build();</span>
+}</pre>
+    </div>
+    <p style="color:#4b5563;"><strong>Review 重点：</strong>需要用 Redis Stack 镜像（含 RedisSearch 模块），普通 Redis 不支持向量索引。docker-compose 里已同步改成 <code class="en-token">redis/redis-stack:7.2.0-v15</code>。</p>
+  </div>
+</div>
+
+<!-- ReviewSearchTool -->
+<div class="code-panel">
+  <div class="code-panel-header">
+    <h3>🛠️ ReviewSearchTool — Agent 工具</h3>
+    <span class="file-path">agent/tool/ReviewSearchTool.java · 修改</span>
+  </div>
+  <div class="code-panel-body">
+    <p class="desc"><strong>文件职责：</strong>Spring AI 的 @Tool 注解方法，Agent 通过它调用 RAG 搜索。返回 JSON 给 Agent 的上下文。</p>
+    <div class="code-block">
+<pre><span class="tok-kw">for</span> (RetrievalResult r : results) {
+    item.put(<span class="tok-str">"citation"</span>, <span class="tok-str">"["</span> + r.citationIndex + <span class="tok-str">"]"</span>);
+    item.put(<span class="tok-str">"content"</span>, r.document.getText());
+    <span class="hl-line">    <span class="tok-kw">if</span> (r.sentiment != <span class="tok-kw">null</span> && !<span class="tok-str">"neutral"</span>.equals(r.sentiment)) {</span>
+<span class="hl-line">        item.put(<span class="tok-str">"sentiment"</span>, r.sentiment);  <span class="tok-cm">// 好评/差评才标注</span></span>
+<span class="hl-line">    }</span>
+<span class="hl-line">    <span class="tok-kw">if</span> (r.rankReason != <span class="tok-kw">null</span>) {</span>
+<span class="hl-line">        item.put(<span class="tok-str">"reason"</span>, r.rankReason);    <span class="tok-cm">// 为什么相关</span></span>
+<span class="hl-line">    }</span>
+}</pre>
+    </div>
+    <p style="color:#4b5563;">中性的不写（减少噪音），有明确倾向的才标注。上限 5 条——不设限的话 Agent 的 tool result 会把模型上下文全吃掉。</p>
+  </div>
+</div>
+
+</section>
+
+<!-- ========== 检索流程图 ========== -->
+<section id="flow">
+<h2>检索流程全景</h2>
+
+<div class="flow-stage">
+  <div class="flow-stage-title">第一阶段：查询扩展</div>
+  <div class="timeline">
+
+    <div class="tl-node new-step" data-step="1">
+      <div class="tl-card">
+        <div class="cn-title">用户输入口语查询 <span class="tl-label new">起点</span></div>
+        <div class="en-method">ReviewSearchTool.searchReviews("朝阳区有适合约会的餐厅吗，别太贵", topK=3)</div>
+        <div class="cn-explain">Agent 调用搜索工具，传入用户的自然语言问题。</div>
+        <div class="tl-branch" style="margin-top:10px;">
+          <div class="branch-text">
+            <span class="branch-condition">如果 query 为空</span>
+            <span class="branch-arrow">→</span>
+            <span class="branch-result">直接返回错误 JSON，不走后续流程</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-node new-step" data-step="2">
+      <div class="tl-card">
+        <div class="cn-title">MQE 多查询改写 <span class="tl-label new">新增</span></div>
+        <div class="en-method">QueryExpander.expandQuery(query, numExpansions=2)</div>
+        <div class="cn-explain">AI 将口语改写成检索标准词："朝阳区 情侣约会 环境氛围" + "朝阳区 性价比 约会餐厅"。</div>
+        <div class="tl-branch" style="margin-top:10px;">
+          <div class="branch-text">
+            <span class="branch-condition">如果 LLM 调用失败</span>
+            <span class="branch-arrow">→</span>
+            <span class="branch-result">返回空列表，少搜两路，不阻断</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-node new-step" data-step="3">
+      <div class="tl-card">
+        <div class="cn-title">HyDE 假想点评生成 <span class="tl-label new">新增</span></div>
+        <div class="en-method">QueryExpander.generateHyde(query)</div>
+        <div class="cn-explain">AI 扮成真实用户写一段假点评："上周和男朋友去了朝阳区一家餐厅，灯光柔和，座位间距大…"</div>
+        <div class="tl-branch" style="margin-top:10px;">
+          <div class="branch-text">
+            <span class="branch-condition">如果 LLM 调用失败</span>
+            <span class="branch-arrow">→</span>
+            <span class="branch-result">返回 null，少搜一路，不阻断</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="flow-stage">
+  <div class="flow-stage-title">第二阶段：多路检索</div>
+  <div class="timeline">
+
+    <div class="tl-node" data-step="4">
+      <div class="tl-card">
+        <div class="cn-title">多路向量检索 + 候选池扩大</div>
+        <div class="en-method">vectorStore.similaritySearch() × 4 路并行</div>
+        <div class="cn-explain">原始查询 + 2 个 MQE 变体 + 1 个 HyDE 假点评 = 4 个查询，每个搜 topK×3 条。共约 12-36 条候选。</div>
+        <div class="tl-branch" style="margin-top:10px;">
+          <div class="branch-text">
+            <span class="branch-condition">如果某路检索失败</span>
+            <span class="branch-arrow">→</span>
+            <span class="branch-result">跳过该路，继续其他检索</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-node" data-step="5">
+      <div class="tl-card">
+        <div class="cn-title">按文档 ID 合并去重</div>
+        <div class="en-method">LinkedHashMap<String, RetrievalResult> dedup</div>
+        <div class="cn-explain">同一段点评可能被多个查询命中（"情侣约会"和"环境氛围"都命中了同一句话）。保留最高分的那次命中。</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="flow-stage">
+  <div class="flow-stage-title">第三阶段：语义精排</div>
+  <div class="timeline">
+
+    <div class="tl-node new-step" data-step="6">
+      <div class="tl-card">
+        <div class="cn-title">LLM 语义重排序 + 观点标注 <span class="tl-label new">新增</span></div>
+        <div class="en-method">ResultReRanker.rerank(query, 17条候选, topK=3)</div>
+        <div class="cn-explain">AI 逐条判断：这条真的回答了用户的问题吗？每个结果标注 relevance（0-1）、sentiment（好评/差评/中性）、reason（为什么相关）。挑选最核心的 3 条。</div>
+        <div class="tl-branch" style="margin-top:10px;">
+          <div class="branch-text">
+            <span class="branch-condition">如果 LLM 调用失败</span>
+            <span class="branch-arrow">→</span>
+            <span class="branch-result">退化为按向量距离排序，sentiment 标记为 "neutral"，reason 标记为 "向量分数"</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-node" data-step="7">
+      <div class="tl-card">
+        <div class="cn-title">组装最终结果</div>
+        <div class="en-method">RAGService.search() returns List&lt;RetrievalResult&gt;</div>
+        <div class="cn-explain">按最终排名分配引用编号 [1] [2] [3]，Agent 用这些编号在回答里标注信息来源。带 sentiment 以供 Agent 避雷。</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</section>
+
+<!-- ========== 自测问答 ========== -->
+<section id="qa">
+<h2>掌握度自测</h2>
+
+<h3 style="color:#1d4ed8;margin-bottom:14px;">基础理解</h3>
+
+<div class="qa-card">
+  <details>
+    <summary>这次改动新增了哪些核心能力？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag basic">基础</span> 考察点：对改动范围的整体把握</div>
+      <div class="answer"><strong>关键词：</strong>MQE 多查询改写、HyDE 假想点评、LLM 语义重排序、观点标注、Redis 持久化<br><br>
+      五个能力围绕一个目标：让用户说人话也能搜到想要的东西。每一步都在缩小"用户怎么问"和"点评怎么写"之间的语义差距。</div>
+    </div>
+  </details>
+</div>
+
+<div class="qa-card">
+  <details>
+    <summary>改动前最核心的问题是什么？为什么直接用向量搜不够？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag basic">基础</span> 考察点：对问题本质的理解</div>
+      <div class="answer"><strong>关键词：</strong>语义鸿沟、口语 vs 书面语、维度灾难<br><br>
+      用户问"那边贵不贵"，点评写"人均消费大概在80-120之间"——关键词完全不重叠，向量空间里距离很远。<br><br>
+      向量搜索本质上是在高维空间里找距离最近的邻居，但如果查询本身就偏离了你要找的东西的区域，最近邻居也不是你要的。</div>
+    </div>
+  </details>
+</div>
+
+<h3 style="color:#15803d;margin:24px 0 14px;">代码实现</h3>
+
+<div class="qa-card">
+  <details>
+    <summary>为什么 MQE 和 HyDE 是两个独立的方法，而不是合在一起？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">实现</span> 考察点：设计粒度</div>
+      <div class="answer"><strong>关键词：</strong>独立降级、可选组合、成本控制<br><br>
+      MQE 和 HyDE 失败的概率不一样——MQE 是结构化的"改写 N 个变体"，输出简单，失败率低。HyDE 要写一段合理的假点评，难度高，失败率也高。<br><br>
+      分开之后可以独立降级：MQE 挂了不影响 HyDE，反之亦然。以后做 AB 测试也可以单独开关。</div>
+    </div>
+  </details>
+</div>
+
+<div class="qa-card">
+  <details>
+    <summary>HyDE 的提示词里为什么强调"不需要完全虚构店铺名称"？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag impl">实现</span> 考察点：prompt 工程细节</div>
+      <div class="answer"><strong>关键词：</strong>向量空间偏移、实体过拟合<br><br>
+      如果 HyDE 虚构了"XX 咖啡厅"，生成的向量会把很多权重放在那个名字上，而不是放在"约会体验"这种抽象概念上。搜出来的结果会偏向包含那个名字的点评，而不是包含那种体验的点评。</div>
+    </div>
+  </details>
+</div>
+
+<h3 style="color:#92400e;margin:24px 0 14px;">设计权衡</h3>
+
+<div class="qa-card">
+  <details>
+    <summary>为什么 LLM 重排序结果里要同时保留向量分数和 LLM 的相关度分数？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag design">设计</span> 考察点：信息冗余的价值</div>
+      <div class="answer"><strong>关键词：</strong>可观测性、debug、降级判定<br><br>
+      两个分数合在一起能回答一个关键问题："LLM 认为这条很相关，但向量分数很低"——说明向量模型可能不适合查这类内容。<br><br>
+      "LLM 认为这条不相关，但向量分数很高"——可能是关键词撞上了，但意思不对。<br><br>
+      这些信息对后续优化方向（换嵌入模型？调整 prompt？）有直接指导意义。</div>
+    </div>
+  </details>
+</div>
+
+<div class="qa-card">
+  <details>
+    <summary>这套设计和 ai-code-helper 的 RAG 走的相反路线，各自的代价是什么？</summary>
+    <div class="qa-card-body">
+      <div class="hint"><span class="qa-tag design">设计</span> 考察点：跨项目对比分析</div>
+      <div class="answer"><strong>此项目的代价：</strong>LLM 依赖重——MQE + HyDE + 重排序三次调用 LLM，延迟高、成本高、稳定性差（每一步都可能出网络问题）。关键词搜索是免费的，LLM 调用不是。<br><br>
+      <strong>ai-code-helper 的代价：</strong>规则不可泛化——HybridRanker 的 60/40 权重是在特定数据集上拍脑袋定的，换个场景要重新调。且关键词匹配遇到同义词完全无能为力。<br><br>
+      <strong>什么时候用哪个：</strong>知识领域越规范（技术文档、代码、百科），规则路线越好。知识领域越自由（点评、评论、社交媒体），语义路线越好。</div>
+    </div>
+  </details>
+</div>
+
+</section>
+
+<!-- ========== 面试追问 ========== -->
+<section id="interview">
+<h2>面试高频追问</h2>
+
+<div class="interview-card">
+  <h3>Q1: "你做了这么多 RAG 增强，有没有做过量化评估？"</h3>
+  <div class="interview-points">
+    <div class="interview-point kp">
+      <h4>✅ 回答要点</h4>
+      保留了 searchBasic() 做 baseline。做了 20 条测试查询的 recall@5 对比。解释为什么 recall@5 比 recall@1 更适合这个场景（Agent 推荐需要多条候选）。
+    </div>
+    <div class="interview-point bonus">
+      <h4>⭐ 加分点</h4>
+      不仅比"增强 vs 基础"，还比了"MQE 单独开 vs HyDE 单独开 vs 两个都开"的消融实验。能说出每一步贡献了多少。
+    </div>
+    <div class="interview-point pitfall">
+      <h4>⚠️ 容易踩坑</h4>
+      GPT 自己生成的评估数据有严重自评偏误——用同样的模型评估自己的输出。应该用人工标注或不同模型做评估。
+    </div>
+  </div>
+</div>
+
+<div class="interview-card">
+  <h3>Q2: "每次搜索调 3 次 LLM（MQE + HyDE + 重排序），延迟和成本扛得住吗？"</h3>
+  <div class="interview-points">
+    <div class="interview-point kp">
+      <h4>✅ 回答要点</h4>
+      延迟可控——每一步都有降级，而且 MQE 和 HyDE 可以并行调（两个独立调用）。重排序用了文本截断（300字）控制 token。实际上最慢的是嵌入调用，不是 LLM。
+    </div>
+    <div class="interview-point bonus">
+      <h4>⭐ 加分点</h4>
+      提缓存策略：相同或相似查询的 MQE/HyDE 结果可以缓存。小红书/大众点评场景里热门查询重复率很高。
+    </div>
+    <div class="interview-point pitfall">
+      <h4>⚠️ 容易踩坑</h4>
+      说"延迟不重要"是错的。Agent 场景里每次工具调用都在用户等待中，3 次额外 LLM 调用可能增加 2-5 秒延迟。要承认这是权衡。
+    </div>
+  </div>
+</div>
+
+<div class="interview-card">
+  <h3>Q3: "SimpleVectorStore 换成 RedisVectorStore 之后，检索质量会变吗？"</h3>
+  <div class="interview-points">
+    <div class="interview-point kp">
+      <h4>✅ 回答要点</h4>
+      理论上不应该变——都是 COSINE 距离，同一个嵌入模型。但如果索引参数（HNSW 的 M 值、EF 值）没调好，近似搜索可能影响 recall。
+    </div>
+    <div class="interview-point bonus">
+      <h4>⭐ 加分点</h4>
+      提 RedisSearch 的 HNSW 参数调优：M=16 适合中小规模（<1M 向量），EF_RUNTIME=10 是默认值但搜索精度可能不够。可以提"用 FLAT 暴力搜索做 ground truth 对比 HNSW 的 recall"。
+    </div>
+    <div class="interview-point pitfall">
+      <h4>⚠️ 容易踩坑</h4>
+      说"Redis 更快"——不一定。单机内存里搜比过网络快。换 Redis 是为了持久化，不是性能。
+    </div>
+  </div>
+</div>
+
+</section>
+
+<!-- ========== 一分钟口述 ========== -->
+<section id="onemin">
+<div class="one-minute">
+  <h2>🗣️ 一分钟口述答案</h2>
+  <p>
+    我给 CityLife Review 的 AI 搜索做了三层增强。<br><br>
+    <strong>第一层，让系统听懂人话：</strong>用户问"那边贵不贵"，系统不是直接搜这句话，而是先让 AI 把它改写成"人均消费价格 性价比"这种点评里常用的词，从多个角度去搜。<br><br>
+    <strong>第二层，用答案找答案：</strong>让 AI 先生成一段假想点评，再用这段假想点评的语义去搜真点评，桥接过短口语和长篇点评之间的风格差距。<br><br>
+    <strong>第三层，AI 精选：</strong>搜回来一堆候选之后，让 AI 做最终判断——哪条真的在回答用户的问题。顺带标注好评差评，帮推荐 Agent 避雷。<br><br>
+    整个管线每一步都挂了都有备用方案，最差情况退回到原来的直接搜索，不会比改之前更差。同时把向量存储从内存换成了 Redis，重启不用重建索引。<br><br>
+    我另一个项目 ai-code-helper 的 RAG 走的是规则路线，这边走的是语义路线——同一个问题在两种场景下走了相反的技术选型，我可以跟你聊聊各自的代价。
+  </p>
+</div>
+</section>
+
+</main>
+</div>
+
+<script>
+// Active TOC highlight on scroll
+(function() {
+  const nav = document.querySelector('.toc-sidebar nav');
+  const links = nav.querySelectorAll('a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+
+  function update() {
+    let current = sections[0];
+    for (const sec of sections) {
+      if (sec.getBoundingClientRect().top <= 120) current = sec;
+    }
+    links.forEach(a => a.classList.remove('active'));
+    const activeLink = nav.querySelector(`a[href="#${current.id}"]`);
+    if (activeLink) activeLink.classList.add('active');
+  }
+
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+
+</body>
+</html>

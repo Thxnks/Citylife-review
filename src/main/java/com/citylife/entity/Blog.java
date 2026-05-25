@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -30,38 +32,24 @@ public class Blog implements Serializable {
      */
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
-    /**
-     * 鍟嗘埛id
-     */
+    @NotNull(message = "Shop ID is required")
     private Long shopId;
-    /**
-     */
+
     private Long userId;
-    /**
-     */
+
     @TableField(exist = false)
     private String icon;
-    /**
-     */
     @TableField(exist = false)
     private String name;
-    /**
-     * 鏄惁鐐硅禐杩囦簡
-     */
     @TableField(exist = false)
     private Boolean isLike;
 
-    /**
-     * 鏍囬
-     */
+    @NotBlank(message = "Blog title is required")
     private String title;
 
-    /**
-     */
     private String images;
 
-    /**
-     */
+    @NotBlank(message = "Blog content is required")
     private String content;
 
     /**
